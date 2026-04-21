@@ -1,0 +1,18 @@
+.omx/
+.codex/
+.swiftpm/
+AGENTS.md
+
+# Local credentials / secrets
+client_secret*.json
+google-oauth*.json
+*.p12
+*.mobileprovision
+
+# Build products
+.build/
+build/
+DerivedData/
+*.xcuserdata/
+xcuserdata/
+*.xcuserstate
