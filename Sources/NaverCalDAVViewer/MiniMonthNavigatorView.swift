@@ -1,5 +1,7 @@
 import SwiftUI
 
+// Compact month picker retained for older navigation surfaces. The primary month
+// jump popover currently lives in ContentView.
 struct MiniMonthNavigatorView: View {
     @ObservedObject var store: CalendarStore
 

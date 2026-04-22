@@ -2,6 +2,8 @@ import Foundation
 import SwiftUI
 import AppKit
 
+// Shared design system, date formatting, palette conversion, and icon animation
+// helpers. Keep global UI constants here so future visual changes are centralized.
 enum CalendarDesign {
     static let lightGray = adaptiveColor(
         light: NSColor(red: 0.945, green: 0.949, blue: 0.957, alpha: 1.0),

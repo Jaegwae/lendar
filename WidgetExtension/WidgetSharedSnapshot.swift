@@ -1,6 +1,8 @@
 import Foundation
 import SwiftUI
 
+// Widget-safe snapshot loading and color conversion. This file must remain free of
+// credentialed network calls to avoid WidgetKit refresh and Keychain prompt issues.
 extension WidgetEventSnapshot {
     static let samples: [WidgetEventSnapshot] = [
         WidgetEventSnapshot(

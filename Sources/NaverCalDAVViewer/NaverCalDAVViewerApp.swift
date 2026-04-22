@@ -2,6 +2,8 @@ import SwiftUI
 import AppKit
 import Foundation
 
+// App entry point. Configures the SwiftUI scene and the underlying NSWindow minimum
+// size so the calendar cannot be resized into an unusable layout.
 @main
 struct NaverCalDAVViewerApp: App {
     private static let minimumWindowSize = NSSize(width: 570, height: 710)

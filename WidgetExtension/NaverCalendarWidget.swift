@@ -1,6 +1,8 @@
 import SwiftUI
 import WidgetKit
 
+// WidgetKit UI. Renders today's app-written snapshot as a thin agenda list without
+// running network or OAuth work inside the extension.
 struct NaverCalendarEntry: TimelineEntry {
     let date: Date
     let items: [WidgetEventSnapshot]

@@ -1,6 +1,8 @@
 import Foundation
 import Security
 
+// Persisted account model. For provider == "google", password is a refresh token;
+// for provider == "caldav", password is the CalDAV/app password.
 struct CalendarConnection: Identifiable, Codable, Equatable {
     var id: String
     var provider: String = "caldav"

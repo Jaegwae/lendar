@@ -1,5 +1,7 @@
 import Foundation
 
+// Basic Auth CalDAV client for manual email-server accounts, especially Naver.
+// Google Calendar intentionally uses GoogleCalendarClient instead of this path.
 struct CalDAVClient {
     let username: String
     let appPassword: String

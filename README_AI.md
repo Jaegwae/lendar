@@ -2,7 +2,7 @@
 
 이 문서는 다음 AI/개발자가 코드를 이어받을 때 빠르게 전체 의도를 파악하기 위한 상세 기록이다. 사용자용 설명은 `README.md`를 참고한다.
 
-현재 버전: 0.1
+현재 버전: 0.2
 
 ## 프로젝트 개요
 
@@ -16,6 +16,34 @@
 - 월간 캘린더 UI/날짜별 일정 모달/일정 상세 모달
 - macOS WidgetKit 위젯
 - Liquid Glass 스타일과 다크 모드 대응
+
+## 버전별 변경사항
+
+### 0.2
+
+- 앱 아이콘을 추가했다.
+- Google OAuth와 Google Calendar API 동기화를 구현했다.
+- 단일 네이버 계정 저장 구조에서 다중 계정 연결 구조로 확장했다.
+- 설정 모달을 계정 목록 기반으로 바꿨다.
+- 계정 추가는 `Google Calendar로 연결`과 `이메일 서버로 연결` 선택 단계로 나뉜다.
+- Google은 OAuth 버튼으로 연결하고, 이메일 서버는 이메일/암호/서버주소 폼으로 연결한다.
+- 삭제 버튼은 빨간 아이콘 버튼이며, 삭제 확인 모달을 거친다.
+- 사이드바는 `caldav.calendar.naver.com` 같은 source heading 아래 캘린더 row를 보여주는 구조다.
+- 캘린더 row에는 색 체크박스와 색상 palette swatch가 모두 있다.
+- 위젯은 앱이 저장한 snapshot만 읽도록 바뀌었다.
+- 작은 창에서 UI가 망가지지 않도록 modal 크기, 월간 grid scale, window min size를 조정했다.
+- `README.md`는 사람용, `README_AI.md`는 AI 인수인계용으로 분리했다.
+
+### 0.1
+
+- 네이버 CalDAV 읽기 기반의 월간 캘린더 앱 초기 버전.
+- 날짜별 일정 목록, 일정 상세, 검색, WidgetKit scaffold가 포함됐다.
+
+## 운영 규칙
+
+- 사용자가 명시적으로 "GitHub에 올려"라고 말하기 전까지 push하지 않는다.
+- GitHub에 올리기 전에는 반드시 `client_secret*.json`, OAuth secret, Codex/OMX 상태 파일이 tracking 대상이 아닌지 확인한다.
+- Google OAuth client secret은 `~/.lendar/google-oauth.json` 또는 환경변수에서만 읽어야 한다.
 
 ## 주요 파일
 
@@ -153,7 +181,7 @@ Google OAuth 설정은 GitHub에 올리면 안 된다.
 
 - 앱은 `~/.lendar/google-oauth.json`을 먼저 읽는다.
 - 없으면 환경변수 `LENDAR_GOOGLE_CLIENT_ID`, `LENDAR_GOOGLE_CLIENT_SECRET`을 읽는다.
-- 개발 중 편의를 위해 로컬 repo의 `client_secret_...json`도 fallback으로 읽지만, 이 파일은 `.gitignore`에 포함되어야 한다.
+- 로컬 repo의 `client_secret_...json`은 `.gitignore` 대상이며 앱 코드에서 직접 fallback으로 읽지 않는다.
 - scope:
   - `https://www.googleapis.com/auth/calendar.readonly`
   - `https://www.googleapis.com/auth/userinfo.email`

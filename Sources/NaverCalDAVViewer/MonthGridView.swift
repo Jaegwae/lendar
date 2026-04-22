@@ -1,5 +1,7 @@
 import SwiftUI
 
+// Scrolling month calendar. Handles week-level event lane layout, selected-date glow,
+// and compact-window scaling for dates, event bars, and row height.
 struct MonthGridView: View {
     @ObservedObject var store: CalendarStore
 

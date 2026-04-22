@@ -1,5 +1,7 @@
 import Foundation
 
+// Converts raw iCalendar VEVENT/VTODO text from CalDAV servers into CalendarItem.
+// Google Calendar API responses bypass this parser and are mapped in CalendarStore.
 enum ICSParser {
     static func parseItems(from ics: String, calendarName: String) -> [CalendarItem] {
         let unfolded = unfold(ics)

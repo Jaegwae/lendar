@@ -3,6 +3,8 @@ import Foundation
 import WidgetKit
 #endif
 
+// App-side widget snapshot writer. The app owns network/auth and writes a flattened
+// snapshot; the widget only reads this data for stable refreshes.
 enum WidgetSnapshotStore {
     static let appGroupID = "group.calendar.naver.viewer"
     static let widgetKind = "NaverCalendarWidget"

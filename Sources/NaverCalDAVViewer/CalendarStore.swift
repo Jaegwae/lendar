@@ -1,6 +1,8 @@
 import Foundation
 import SwiftUI
 
+// Main state and sync orchestrator. Merges CalDAV and Google Calendar API accounts,
+// stores per-account errors, applies color overrides, and writes widget snapshots.
 @MainActor
 final class CalendarStore: ObservableObject {
     @Published var naverID = ""

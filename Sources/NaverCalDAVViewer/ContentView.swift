@@ -2,6 +2,8 @@ import SwiftUI
 import AppKit
 import Network
 
+// Main SwiftUI surface: toolbar, sidebar, modal stack, settings, search, day agenda,
+// and the Google OAuth loopback coordination used by settings.
 struct ContentView: View {
     @StateObject private var store = CalendarStore()
     @State private var showingSidebar = false

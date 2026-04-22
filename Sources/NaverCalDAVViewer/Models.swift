@@ -1,5 +1,7 @@
 import Foundation
 
+// Shared value models for app and widget. CalendarItem is the normalized event/todo
+// representation after CalDAV parsing or Google Calendar API mapping.
 struct CalendarCollection: Identifiable {
     let id = UUID()
     let href: String
