@@ -46,6 +46,6 @@ private struct WindowSizeConfigurator: NSViewRepresentable {
 
     private func configure(_ window: NSWindow?) {
         guard let window else { return }
-        window.minSize = NSSize(width: 760, height: 1050)
+        window.minSize = NSSize(width: 570, height: 710)
     }
 }
