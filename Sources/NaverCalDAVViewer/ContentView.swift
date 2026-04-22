@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var showingSidebar = false
     @State private var showingSearchSheet = false
     @State private var showingMonthJumpPopover = false
+    @State private var colorPickerCalendarName: String?
 
     var body: some View {
         GeometryReader { proxy in
@@ -316,6 +317,35 @@ struct ContentView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+
+            Button {
+                colorPickerCalendarName = name
+            } label: {
+                Circle()
+                    .fill(color)
+                    .frame(width: 18, height: 18)
+                    .overlay(
+                        Circle()
+                            .stroke(CalendarDesign.glassHighlight.opacity(0.80), lineWidth: 1)
+                    )
+                    .shadow(color: color.opacity(0.24), radius: 5, x: 0, y: 2)
+                    .calendarHoverLift(scale: 1.10)
+            }
+            .buttonStyle(CalendarAnimatedIconButtonStyle())
+            .popover(isPresented: Binding(
+                get: { colorPickerCalendarName == name },
+                set: { isPresented in
+                    colorPickerCalendarName = isPresented ? name : nil
+                }
+            ), arrowEdge: .trailing) {
+                CalendarColorPalettePopover(
+                    selectedCode: store.colorCode(for: name),
+                    onSelect: { color in
+                        store.setCalendarColor(color, for: name)
+                        colorPickerCalendarName = nil
+                    }
+                )
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
