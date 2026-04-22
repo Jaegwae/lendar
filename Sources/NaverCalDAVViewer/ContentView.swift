@@ -152,7 +152,7 @@ struct ContentView: View {
 
     private var topUnifiedHeader: some View {
         GeometryReader { proxy in
-            let scale = min(1.0, max(0.62, proxy.size.width / 760.0))
+            let scale = min(1.0, max(0.82, proxy.size.width / 760.0))
         HStack(alignment: .center, spacing: 14) {
             Button {
                 toggleSidebar()

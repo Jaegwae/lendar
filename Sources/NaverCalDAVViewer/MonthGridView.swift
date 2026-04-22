@@ -112,7 +112,7 @@ struct MonthGridView: View {
     }
 
     private func layoutScale(for width: CGFloat) -> CGFloat {
-        min(1.0, max(0.66, width / 760.0))
+        min(1.0, max(0.82, width / 760.0))
     }
 
     private func weekdayColor(_ index: Int) -> Color {
