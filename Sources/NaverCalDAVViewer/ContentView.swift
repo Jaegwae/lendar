@@ -338,29 +338,38 @@ private struct SettingsSheet: View {
     @State private var addMethod: AddMethod?
 
     var body: some View {
-        ZStack {
-            VStack(alignment: .leading, spacing: 18) {
-                settingsHeader
+        GeometryReader { proxy in
+            let modalWidth = min(540, max(320, proxy.size.width - 28))
+            let modalHeight = min(560, max(340, proxy.size.height - 40))
 
-                connectedAccountsSection
-            }
+            ZStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        settingsHeader
 
-            if mode != .list {
-                accountEditorOverlay
-                    .transition(.scale(scale: 0.985).combined(with: .opacity))
-            }
+                        connectedAccountsSection
+                    }
+                    .padding(24)
+                }
+                .scrollIndicators(.hidden)
 
-            if showingDeleteConfirmation {
-                deleteConfirmationOverlay
-                    .transition(.scale(scale: 0.985).combined(with: .opacity))
+                if mode != .list {
+                    accountEditorOverlay
+                        .transition(.scale(scale: 0.985).combined(with: .opacity))
+                }
+
+                if showingDeleteConfirmation {
+                    deleteConfirmationOverlay
+                        .transition(.scale(scale: 0.985).combined(with: .opacity))
+                }
             }
-        }
-        .animation(.smooth(duration: 0.18), value: showingDeleteConfirmation)
-        .padding(24)
-        .frame(width: 540)
-        .calendarModalContainer()
-        .onAppear {
-            resetFormFromStore()
+            .animation(.smooth(duration: 0.18), value: showingDeleteConfirmation)
+            .frame(width: modalWidth, height: modalHeight)
+            .calendarModalContainer()
+            .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            .onAppear {
+                resetFormFromStore()
+            }
         }
     }
 
@@ -558,7 +567,7 @@ private struct SettingsSheet: View {
                 }
             }
             .padding(18)
-            .frame(width: 360)
+            .frame(maxWidth: 360)
             .calendarGlassSurface(cornerRadius: 14, material: .regularMaterial, tintOpacity: 0.24, shadowOpacity: 0.16)
         }
     }
@@ -592,7 +601,7 @@ private struct SettingsSheet: View {
                 }
             }
             .padding(18)
-            .frame(width: 420)
+            .frame(maxWidth: 420)
             .calendarGlassSurface(cornerRadius: 14, material: .regularMaterial, tintOpacity: 0.24, shadowOpacity: 0.16)
         }
     }
@@ -1039,13 +1048,20 @@ private struct DayAgendaSheet: View {
     let onOpenDetail: (CalendarItem) -> Void
 
     var body: some View {
+        GeometryReader { proxy in
+            let modalWidth = min(600, max(320, proxy.size.width - 28))
+            let modalHeight = min(500, max(360, proxy.size.height - 40))
+            let compact = modalWidth < 470
+
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(CalendarFormatting.dayHeader.string(from: date))
-                        .font(CalendarDesign.displayFont(size: 26, weight: .semibold))
+                        .font(CalendarDesign.displayFont(size: compact ? 22 : 26, weight: .semibold))
                         .tracking(-0.28)
                         .foregroundStyle(CalendarDesign.nearBlack)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
 
                     Text(daySummary)
                         .font(CalendarDesign.textFont(size: 13, weight: .medium))
@@ -1059,7 +1075,7 @@ private struct DayAgendaSheet: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(items) { item in
-                        DayEventCard(item: item, day: date, isSelected: selectedItem?.id == item.id)
+                        DayEventCard(item: item, day: date, isSelected: selectedItem?.id == item.id, compact: compact)
                             .onTapGesture {
                                 selectedItem = item
                                 onOpenDetail(item)
@@ -1068,7 +1084,7 @@ private struct DayAgendaSheet: View {
                         if item.id != items.last?.id {
                             Divider()
                                 .overlay(CalendarDesign.divider)
-                                .padding(.leading, 124)
+                                .padding(.leading, compact ? 0 : 124)
                         }
                     }
 
@@ -1093,8 +1109,10 @@ private struct DayAgendaSheet: View {
             .calendarModalSectionSurface()
         }
         .padding(20)
-        .frame(width: 600, height: 500)
+        .frame(width: modalWidth, height: modalHeight)
         .calendarModalContainer()
+        .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+        }
     }
 
     private var daySummary: String {
@@ -1109,25 +1127,26 @@ private struct DayEventCard: View {
     let item: CalendarItem
     let day: Date
     let isSelected: Bool
+    let compact: Bool
 
     var body: some View {
-        HStack(alignment: .top, spacing: 13) {
+        HStack(alignment: compact ? .center : .top, spacing: compact ? 9 : 13) {
             VStack(alignment: .trailing, spacing: 3) {
                 Text(timeTitle)
-                    .font(CalendarDesign.textFont(size: 13, weight: .semibold))
+                    .font(CalendarDesign.textFont(size: compact ? 11 : 13, weight: .semibold))
                     .tracking(-0.12)
                     .foregroundStyle(item.isCompleted ? CalendarDesign.textTertiary : CalendarDesign.nearBlack)
                     .lineLimit(1)
 
                 if !timeSubtitle.isEmpty {
                     Text(timeSubtitle)
-                        .font(CalendarDesign.textFont(size: 11, weight: .regular))
+                        .font(CalendarDesign.textFont(size: compact ? 10 : 11, weight: .regular))
                         .tracking(-0.12)
                         .foregroundStyle(CalendarDesign.textTertiary)
                         .lineLimit(1)
                 }
             }
-            .frame(width: 84, alignment: .trailing)
+            .frame(width: compact ? 58 : 84, alignment: .trailing)
 
             Circle()
                 .fill(eventColor)
@@ -1137,10 +1156,11 @@ private struct DayEventCard: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(CalendarText.cleanName(item.summary))
-                        .font(CalendarDesign.textFont(size: 15, weight: .semibold))
+                        .font(CalendarDesign.textFont(size: compact ? 13 : 15, weight: .semibold))
                         .tracking(-0.224)
                         .foregroundStyle(titleColor)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.78)
 
                     if item.isCompleted {
                         Text("완료")
@@ -1157,16 +1177,17 @@ private struct DayEventCard: View {
                 }
 
                 Text(metaText)
-                    .font(CalendarDesign.textFont(size: 12))
+                    .font(CalendarDesign.textFont(size: compact ? 11 : 12))
                     .tracking(-0.12)
                     .foregroundStyle(CalendarDesign.textSecondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
 
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
+        .padding(.horizontal, compact ? 8 : 12)
+        .padding(.vertical, compact ? 9 : 12)
         .contentShape(Rectangle())
         .background(isSelected ? CalendarDesign.appleBlue.opacity(0.08) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -1226,6 +1247,10 @@ private struct SelectedItemSheet: View {
     let onClose: () -> Void
 
     var body: some View {
+        GeometryReader { proxy in
+            let modalWidth = min(560, max(320, proxy.size.width - 28))
+            let modalHeight = min(620, max(340, proxy.size.height - 40))
+            ScrollView {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 14) {
                 Circle()
@@ -1283,8 +1308,11 @@ private struct SelectedItemSheet: View {
             }
         }
         .padding(22)
-        .frame(width: 560)
+            }
+        .frame(width: modalWidth, height: modalHeight)
         .calendarModalContainer()
+        .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+        }
     }
 
     private var noteSection: some View {
@@ -1416,9 +1444,14 @@ private struct ScheduleSearchSheet: View {
     }
 
     var body: some View {
+        GeometryReader { proxy in
+            let modalWidth = min(700, max(320, proxy.size.width - 28))
+            let modalHeight = min(560, max(360, proxy.size.height - 40))
+            let compact = modalWidth < 500
+
         VStack(alignment: .leading, spacing: 14) {
             Text("일정 검색")
-                .font(CalendarDesign.displayFont(size: 32, weight: .semibold))
+                .font(CalendarDesign.displayFont(size: compact ? 26 : 32, weight: .semibold))
                 .tracking(-0.28)
                 .foregroundStyle(CalendarDesign.nearBlack)
 
@@ -1489,8 +1522,10 @@ private struct ScheduleSearchSheet: View {
             .calendarModalSectionSurface()
         }
         .padding(20)
-        .frame(width: 700, height: 560)
+        .frame(width: modalWidth, height: modalHeight)
         .calendarModalContainer()
+        .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+        }
     }
 
     private var dateRangeFilterBar: some View {
