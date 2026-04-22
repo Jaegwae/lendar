@@ -14,6 +14,7 @@ struct NaverCalDAVViewerApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .background(WindowSizeConfigurator())
         }
         .defaultSize(width: 1512, height: 920)
         .windowResizability(.automatic)
@@ -25,5 +26,26 @@ struct NaverCalDAVViewerApp: App {
                 .keyboardShortcut(",", modifiers: [.command, .option])
             }
         }
+    }
+}
+
+private struct WindowSizeConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            configure(view.window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            configure(nsView.window)
+        }
+    }
+
+    private func configure(_ window: NSWindow?) {
+        guard let window else { return }
+        window.minSize = NSSize(width: 760, height: 900)
     }
 }
