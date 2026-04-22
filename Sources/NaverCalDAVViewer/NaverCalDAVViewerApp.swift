@@ -4,6 +4,8 @@ import Foundation
 
 @main
 struct NaverCalDAVViewerApp: App {
+    private static let minimumWindowSize = NSSize(width: 570, height: 710)
+
     init() {
         NSApplication.shared.setActivationPolicy(.regular)
         DispatchQueue.main.async {
@@ -14,10 +16,14 @@ struct NaverCalDAVViewerApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .background(WindowSizeConfigurator())
+                .frame(
+                    minWidth: Self.minimumWindowSize.width,
+                    minHeight: Self.minimumWindowSize.height
+                )
+                .background(WindowSizeConfigurator(minimumSize: Self.minimumWindowSize))
         }
         .defaultSize(width: 1512, height: 920)
-        .windowResizability(.automatic)
+        .windowResizability(.contentMinSize)
         .commands {
             CommandMenu("Setting") {
                 Button("Sync Settings") {
@@ -30,6 +36,8 @@ struct NaverCalDAVViewerApp: App {
 }
 
 private struct WindowSizeConfigurator: NSViewRepresentable {
+    let minimumSize: NSSize
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
@@ -46,6 +54,7 @@ private struct WindowSizeConfigurator: NSViewRepresentable {
 
     private func configure(_ window: NSWindow?) {
         guard let window else { return }
-        window.minSize = NSSize(width: 570, height: 710)
+        window.minSize = minimumSize
+        window.contentMinSize = minimumSize
     }
 }
