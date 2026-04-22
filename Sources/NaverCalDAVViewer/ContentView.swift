@@ -151,28 +151,31 @@ struct ContentView: View {
     }
 
     private var topUnifiedHeader: some View {
+        GeometryReader { proxy in
+            let scale = min(1.0, max(0.62, proxy.size.width / 760.0))
         HStack(alignment: .center, spacing: 14) {
             Button {
                 toggleSidebar()
             } label: {
                 Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 18 * scale, weight: .semibold))
                     .foregroundStyle(.white)
                     .calendarAnimatedIcon(rotation: 90, scale: 1.06)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 44 * scale, height: 44 * scale)
                     .contentShape(Rectangle())
             }
             .calendarHeaderButtonStyle()
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(CalendarFormatting.dayHeader.string(from: store.selectedDate))
-                    .font(CalendarDesign.textFont(size: 14, weight: .regular))
+                    .font(CalendarDesign.textFont(size: 14 * scale, weight: .regular))
                     .tracking(-0.224)
                     .foregroundStyle(.white.opacity(0.72))
+                    .lineLimit(1)
 
                 HStack(alignment: .firstTextBaseline, spacing: 9) {
                     Text(CalendarFormatting.compactMonthTitle.string(from: store.displayedMonth))
-                        .font(CalendarDesign.displayFont(size: 46, weight: .semibold))
+                        .font(CalendarDesign.displayFont(size: 46 * scale, weight: .semibold))
                         .tracking(-0.28)
                         .foregroundStyle(.white)
                         .contentTransition(.numericText())
@@ -187,7 +190,7 @@ struct ContentView: View {
                             .rotationEffect(.degrees(showingMonthJumpPopover ? 180 : 0))
                             .animation(.snappy(duration: 0.24, extraBounce: 0.04), value: showingMonthJumpPopover)
                             .calendarAnimatedIcon(yOffset: 1)
-                            .frame(width: 24, height: 24)
+                            .frame(width: 24 * scale, height: 24 * scale)
                             .background(
                                 Circle()
                                     .fill(Color.white.opacity(0.10))
@@ -217,15 +220,18 @@ struct ContentView: View {
                     showingSearchSheet = true
                 } label: {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 18 * scale, weight: .semibold))
                         .foregroundStyle(.white)
                         .calendarAnimatedIcon(rotation: -10, scale: 1.08)
-                        .frame(width: 44, height: 44)
+                        .frame(width: 44 * scale, height: 44 * scale)
                         .contentShape(Rectangle())
                 }
                 .calendarHeaderButtonStyle()
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        }
+        .frame(height: 72)
     }
 
     private var sidebarDrawer: some View {

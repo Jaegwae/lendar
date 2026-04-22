@@ -10,11 +10,13 @@ struct MonthGridView: View {
     private let visibleLaneCount = 4
 
     var body: some View {
-        ScrollViewReader { proxy in
+        GeometryReader { outer in
+            let scale = layoutScale(for: outer.size.width)
+            ScrollViewReader { proxy in
             VStack(spacing: 0) {
-                weekdayHeader
-                    .padding(.horizontal, 10)
-                    .padding(.top, 10)
+                weekdayHeader(scale: scale)
+                    .padding(.horizontal, 10 * scale)
+                    .padding(.top, 10 * scale)
                     .padding(.bottom, 4)
 
                 ScrollView {
@@ -24,6 +26,7 @@ struct MonthGridView: View {
                                 section: section,
                                 selectedDate: store.selectedDate,
                                 visibleLaneCount: visibleLaneCount,
+                                scale: scale,
                                 openDay: store.openDay
                             )
                             .id(section.monthStart)
@@ -43,7 +46,7 @@ struct MonthGridView: View {
                         }
                     }
                     .padding(.horizontal, 10)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 24 * scale)
                 }
                 .coordinateSpace(name: "calendar-scroll")
             }
@@ -83,28 +86,33 @@ struct MonthGridView: View {
                 }
             }
         }
+        }
     }
 
     private var todayMonthStart: Date {
         Self.monthStart(for: Date())
     }
 
-    private var weekdayHeader: some View {
+    private func weekdayHeader(scale: CGFloat) -> some View {
         HStack(spacing: 0) {
             ForEach(Array(weekdayLabels.enumerated()), id: \.offset) { index, label in
                 Text(label)
-                    .font(CalendarDesign.textFont(size: 12, weight: .semibold))
+                    .font(CalendarDesign.textFont(size: 12 * scale, weight: .semibold))
                     .tracking(-0.12)
                     .foregroundStyle(weekdayColor(index))
                     .frame(maxWidth: .infinity)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 8 * scale)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(CalendarDesign.glassHighlight.opacity(0.72), lineWidth: 1)
         )
+    }
+
+    private func layoutScale(for width: CGFloat) -> CGFloat {
+        min(1.0, max(0.66, width / 760.0))
     }
 
     private func weekdayColor(_ index: Int) -> Color {
@@ -253,6 +261,7 @@ private struct MonthSectionView: View {
     let section: MonthSectionModel
     let selectedDate: Date
     let visibleLaneCount: Int
+    let scale: CGFloat
     let openDay: (Date) -> Void
 
     var body: some View {
@@ -266,6 +275,7 @@ private struct MonthSectionView: View {
                     hiddenCountByColumn: row.hiddenCountByColumn,
                     visibleLaneCount: visibleLaneCount,
                     selectedDate: selectedDate,
+                    scale: scale,
                     openDay: openDay
                 )
             }
@@ -281,6 +291,7 @@ private struct MonthWeekRow: View {
     let hiddenCountByColumn: [Int]
     let visibleLaneCount: Int
     let selectedDate: Date
+    let scale: CGFloat
     let openDay: (Date) -> Void
     @Environment(\.colorScheme) private var colorScheme
 
@@ -305,7 +316,7 @@ private struct MonthWeekRow: View {
     }
 
     private var rowHeight: CGFloat {
-        172
+        172 * scale
     }
 
     @ViewBuilder
@@ -344,10 +355,10 @@ private struct MonthWeekRow: View {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .stroke(CalendarDesign.appleBlue.opacity(colorScheme == .dark ? 0.54 : 0.28), lineWidth: 1)
                     )
-                    .shadow(color: CalendarDesign.selectedDayShadow, radius: 18, x: 0, y: 0)
-                    .shadow(color: CalendarDesign.appleBlue.opacity(colorScheme == .dark ? 0.38 : 0.22), radius: 22, x: 0, y: 0)
-                    .frame(width: columnWidth - 8, height: rowHeight - 8)
-                    .offset(x: CGFloat(index) * columnWidth + 4, y: 4)
+                    .shadow(color: CalendarDesign.selectedDayShadow, radius: 18 * scale, x: 0, y: 0)
+                    .shadow(color: CalendarDesign.appleBlue.opacity(colorScheme == .dark ? 0.38 : 0.22), radius: 22 * scale, x: 0, y: 0)
+                    .frame(width: columnWidth - 8 * scale, height: rowHeight - 8 * scale)
+                    .offset(x: CGFloat(index) * columnWidth + 4 * scale, y: 4 * scale)
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
@@ -361,10 +372,10 @@ private struct MonthWeekRow: View {
                 if let date {
                     let isToday = Calendar.current.isDateInToday(date)
                     Text(CalendarFormatting.dayNumber.string(from: date))
-                        .font(CalendarDesign.displayFont(size: 21, weight: .semibold))
+                        .font(CalendarDesign.displayFont(size: 21 * scale, weight: .semibold))
                         .tracking(-0.28)
-                        .padding(.horizontal, isToday ? 10 : 0)
-                        .padding(.vertical, isToday ? 2 : 0)
+                        .padding(.horizontal, isToday ? 10 * scale : 0)
+                        .padding(.vertical, isToday ? 2 * scale : 0)
                         .background(
                             Capsule(style: .continuous)
                                 .fill(isToday ? CalendarDesign.appleBlue : .clear)
@@ -376,8 +387,8 @@ private struct MonthWeekRow: View {
                 }
             }
             .frame(width: columnWidth, alignment: .topLeading)
-            .padding(.leading, 10)
-            .padding(.top, 8)
+            .padding(.leading, 10 * scale)
+            .padding(.top, 8 * scale)
             .allowsHitTesting(false)
             .offset(x: CGFloat(index) * columnWidth)
         }
@@ -388,14 +399,15 @@ private struct MonthWeekRow: View {
         ForEach(segments.filter { $0.lane < visibleLaneCount }) { segment in
             let x = CGFloat(segment.startColumn) * columnWidth + 4
             let width = CGFloat(segment.endColumn - segment.startColumn + 1) * columnWidth - 8
-            let y = 54 + CGFloat(segment.lane) * 21
+            let y = (54 + CGFloat(segment.lane) * 21) * scale
 
             MonthBarEventView(
                 item: segment.item,
                 position: segment.position,
-                isInDisplayedMonth: true
+                isInDisplayedMonth: true,
+                scale: scale
             )
-            .frame(width: width, height: 17)
+            .frame(width: width, height: 17 * scale)
             .offset(x: x, y: y)
             .allowsHitTesting(false)
         }
@@ -404,10 +416,10 @@ private struct MonthWeekRow: View {
             ForEach(Array(hiddenCountByColumn.enumerated()), id: \.offset) { index, count in
                 if count > 0 {
                     Text("+\(count)")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 12 * scale, weight: .semibold))
                         .foregroundStyle(CalendarDesign.linkBlue)
                         .frame(width: columnWidth, alignment: .topLeading)
-                        .offset(x: CGFloat(index) * columnWidth + 8, y: 54 + CGFloat(visibleLaneCount) * 21 + 4)
+                        .offset(x: CGFloat(index) * columnWidth + 8 * scale, y: (54 + CGFloat(visibleLaneCount) * 21 + 4) * scale)
                 }
             }
         }
@@ -428,6 +440,7 @@ private struct MonthBarEventView: View {
     let item: CalendarItem
     let position: CalendarSpanPosition
     let isInDisplayedMonth: Bool
+    let scale: CGFloat
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -437,20 +450,20 @@ private struct MonthBarEventView: View {
 
             HStack(spacing: 4) {
                 Text(CalendarText.cleanName(item.summary))
-                    .font(CalendarDesign.textFont(size: 10, weight: item.isCompleted ? .medium : .semibold))
+                    .font(CalendarDesign.textFont(size: 10 * scale, weight: item.isCompleted ? .medium : .semibold))
                     .tracking(-0.08)
                     .foregroundStyle(labelColor)
                     .lineLimit(1)
-                    .padding(.leading, position == .middle ? 3 : 6)
+                    .padding(.leading, (position == .middle ? 3 : 6) * scale)
 
                 Spacer(minLength: 0)
 
                 if item.isCompleted {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 7, weight: .bold))
+                        .font(.system(size: 7 * scale, weight: .bold))
                         .foregroundStyle(labelColor.opacity(0.9))
                         .calendarAnimatedIcon(scale: 1.18)
-                        .padding(.trailing, 5)
+                        .padding(.trailing, 5 * scale)
                 }
             }
         }
