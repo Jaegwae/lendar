@@ -24,14 +24,24 @@
 - 앱 아이콘을 추가했다.
 - Google OAuth와 Google Calendar API 동기화를 구현했다.
 - 단일 네이버 계정 저장 구조에서 다중 계정 연결 구조로 확장했다.
+- legacy Google-CalDAV metadata를 로드 시 `google` provider로 재분류하도록 보강했다.
 - 설정 모달을 계정 목록 기반으로 바꿨다.
 - 계정 추가는 `Google Calendar로 연결`과 `이메일 서버로 연결` 선택 단계로 나뉜다.
 - Google은 OAuth 버튼으로 연결하고, 이메일 서버는 이메일/암호/서버주소 폼으로 연결한다.
 - 삭제 버튼은 빨간 아이콘 버튼이며, 삭제 확인 모달을 거친다.
 - 사이드바는 `caldav.calendar.naver.com` 같은 source heading 아래 캘린더 row를 보여주는 구조다.
 - 캘린더 row에는 색 체크박스와 색상 palette swatch가 모두 있다.
+- 초기 동기화 범위를 현재 월 기준 과거 12개월 / 미래 24개월로 줄였다.
+- 먼 과거/미래 월로 이동하면 그 달 주변만 추가 동기화해 기존 데이터에 병합한다.
+- CalDAV/Google 계정 fetch는 병렬화했고, provider별/캘린더별 timing diagnostics를 DEBUG 로그로 남긴다.
+- 네이버 CalDAV multiget fallback에서 open-ended 반복 일정이 sync window 밖까지 무한 확장되지 않게 제한했다.
 - 위젯은 앱이 저장한 snapshot만 읽도록 바뀌었다.
 - 작은 창에서 UI가 망가지지 않도록 modal 크기, 월간 grid scale, window min size를 조정했다.
+- 월 헤더를 Apple Calendar처럼 밝은 타이틀 영역으로 재구성했다.
+- 상단 우측에 이전/오늘/다음 달 버튼을 추가했다.
+- 빠른 연속 월 이동 시 scrollTo 애니메이션이 겹치지 않도록 coalescing을 넣었다.
+- 스크롤로 2027년 4월 같은 현재 section window의 끝에 도달하면 다음 달 section이 이어지도록 확장 트리거를 추가했다.
+- 버튼 전반에 hover/pressed 색 피드백을 추가했다.
 - `README.md`는 사람용, `README_AI.md`는 AI 인수인계용으로 분리했다.
 
 ### 0.1
@@ -76,6 +86,7 @@
 - `Sources/NaverCalDAVViewer/CalendarStore.swift`
   - 앱 상태와 동기화 결과 반영
   - 캘린더 선택/월 이동/날짜 선택/색상 override/위젯 스냅샷 저장 트리거 담당
+  - 현재 로드된 sync range 추적과 먼 달 추가 동기화 병합 담당
 
 - `Sources/NaverCalDAVViewer/CalendarSyncService.swift`
   - 연결된 계정 배열을 순회하며 동기화
@@ -87,6 +98,10 @@
 - `Sources/NaverCalDAVViewer/CalendarSyncWindow.swift`
   - 초기 동기화 범위 제한
   - Google 반복 일정 서버 확장을 줄이기 위해 현재 월 기준 과거 12개월/미래 24개월만 요청
+
+- `Sources/NaverCalDAVViewer/SyncTiming.swift`
+  - sync phase timing helper
+  - DEBUG diagnostics 및 병목 분석용
 
 - `Sources/NaverCalDAVViewer/CalendarItemOrdering.swift`
   - 전체 일정/날짜별 일정 정렬 규칙
@@ -101,6 +116,8 @@
 - `Sources/NaverCalDAVViewer/GoogleCalendarClient.swift`
   - Google Calendar API 동기화
   - OAuth 설정 로딩, token refresh, calendar/event 조회 모델 포함
+  - calendarList 후 각 캘린더 events 요청을 병렬화
+  - `showDeleted=false`와 cancelled event filter 적용
 
 - `Sources/NaverCalDAVViewer/ScheduleSearch.swift`
   - 검색 모달의 기간 필터와 fuzzy score 로직
@@ -152,6 +169,8 @@
   - Basic Auth 기반 CalDAV 클라이언트
   - 네이버 CalDAV에 사용
   - Google CalDAV는 최종적으로 쓰지 않는 방향으로 결정
+  - calendar-query가 비어 있으면 multiget fallback 사용
+  - 캘린더별 fetch 병렬화 및 timing diagnostics 기록
 
 - `Sources/NaverCalDAVViewer/CalDAVPath.swift`
   - CalDAV URL/path 정규화, fallback path 생성
@@ -169,10 +188,12 @@
 - `Sources/NaverCalDAVViewer/ICSParser.swift`
   - CalDAV에서 받은 iCalendar 텍스트를 `CalendarItem`으로 변환
   - folded line, 반복 필드, `TZID`/`VALUE=DATE`, `RDATE`, `RECURRENCE-ID` override 처리
+  - sync range 밖 일정은 파싱 결과에서 걸러 성능을 보호
 
 - `Sources/NaverCalDAVViewer/ICSRecurrenceRule.swift`
   - `DAILY`/`WEEKLY`/`MONTHLY`/`YEARLY` RRULE 확장 처리
   - `WKST`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYYEARDAY`, `BYWEEKNO`, `BYSETPOS` 필터 처리
+  - open-ended recurrence도 요청 range 기준으로만 확장
 
 - `Sources/NaverCalDAVViewer/Models.swift`
   - `CalendarItem`, `WidgetEventSnapshot` 등 공유 값 모델
@@ -181,6 +202,8 @@
   - 월간 캘린더 그리드
   - 날짜 셀 클릭 시 해당 날짜 일정 리스트 모달
   - 이벤트 바 배치 및 선택 날짜 glow
+  - 버튼 기반 month jump scroll과 스크롤 기반 visible month 감지 조율
+  - section window 끝에 가까우면 다음/이전 달 section을 이어서 확장
 
 - `WidgetExtension/NaverCalendarWidget.swift`
   - WidgetKit 위젯 UI
@@ -200,7 +223,10 @@
 3. `restoreConnections()`
 4. `scheduleInitialLoadIfPossible()`
 5. `load()`
-6. 연결된 계정 배열 순회
+6. 초기 sync window 계산
+   - 현재 월 기준 과거 12개월
+   - 현재 월 기준 미래 24개월
+7. 연결된 계정 배열 병렬 fetch
 7. 계정별로 데이터 가져오기
    - `provider == "google"`: Google Calendar API
    - `provider == "caldav"`: CalDAV
@@ -323,13 +349,14 @@ Google 테스트 앱이므로 다음이 나올 수 있다.
 
 현재 이벤트 조회 범위:
 
-- 현재 날짜 기준 과거 5년
-- 미래 10년
+- 초기 로드: 현재 월 기준 과거 12개월 / 미래 24개월
+- 먼 달 이동 시: 그 달을 중심으로 추가 범위를 재요청
 
 이유:
 
-- UI에서 조회 개월 수를 제거했다.
-- 하지만 Google API/CalDAV 서버는 무제한 전체 조회보다 bounded time range가 안정적이다.
+- UI에서 조회 개월 수 입력은 없애되, 초기 응답은 빠르게 보여야 한다.
+- Google API는 `singleEvents=true`로 반복 일정을 서버에서 펼치므로 너무 넓은 범위는 응답량이 급격히 커진다.
+- 네이버 CalDAV는 time-range query가 빈 결과를 주는 경우가 있어 multiget fallback이 발생하는데, 이때 범위 밖 반복 일정까지 확장하면 성능이 크게 악화된다.
 
 ## CalDAV 구현
 
