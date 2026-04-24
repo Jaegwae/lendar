@@ -22,12 +22,55 @@
 		A1000000000000000000000D /* NaverCalendarWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000D /* NaverCalendarWidgetBundle.swift */; };
 		A1000000000000000000000E /* lendar Widget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* lendar Widget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A1000000000000000000000F /* ConnectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* ConnectionStore.swift */; };
-		A10000000000000000000015 /* CalDAVClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* CalDAVClient.swift */; };
-		A10000000000000000000016 /* CalendarSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* CalendarSupport.swift */; };
 		A10000000000000000000017 /* ConnectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* ConnectionStore.swift */; };
-		A10000000000000000000018 /* ICSParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* ICSParser.swift */; };
 		A10000000000000000000019 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* Models.swift */; };
 		A1000000000000000000001A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* Assets.xcassets */; };
+		A1000000000000000000001B /* SharedCalendarPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* SharedCalendarPalette.swift */; };
+		A1000000000000000000001C /* ScheduleSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* ScheduleSearch.swift */; };
+		A1000000000000000000001D /* MonthLayoutBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* MonthLayoutBuilder.swift */; };
+		A1000000000000000000001E /* GoogleOAuthCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* GoogleOAuthCoordinator.swift */; };
+		A1000000000000000000001F /* GoogleCalendarClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001A /* GoogleCalendarClient.swift */; };
+		A10000000000000000000020 /* SharedCalendarPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* SharedCalendarPalette.swift */; };
+		A10000000000000000000021 /* CalendarPopovers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001B /* CalendarPopovers.swift */; };
+		A10000000000000000000022 /* CalendarViewSurfaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001C /* CalendarViewSurfaces.swift */; };
+		A10000000000000000000023 /* EventSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001D /* EventSheets.swift */; };
+		A10000000000000000000024 /* SearchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001E /* SearchSheet.swift */; };
+		A10000000000000000000025 /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001F /* SettingsSheet.swift */; };
+		A10000000000000000000026 /* CalendarDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* CalendarDesign.swift */; };
+		A10000000000000000000027 /* CalendarBaseViewModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021 /* CalendarBaseViewModifiers.swift */; };
+		A10000000000000000000028 /* CalendarValueParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022 /* CalendarValueParser.swift */; };
+		A10000000000000000000029 /* CalendarFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* CalendarFormatting.swift */; };
+		A1000000000000000000002A /* CalendarPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000024 /* CalendarPalette.swift */; };
+		A1000000000000000000002B /* CalendarText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000025 /* CalendarText.swift */; };
+		A1000000000000000000002C /* CalendarConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000026 /* CalendarConnection.swift */; };
+		A1000000000000000000002D /* ConnectionNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000027 /* ConnectionNormalizer.swift */; };
+		A1000000000000000000002E /* ConnectionPasswordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000028 /* ConnectionPasswordStore.swift */; };
+		A1000000000000000000002F /* SharedKeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000029 /* SharedKeychainStore.swift */; };
+		A10000000000000000000030 /* CalendarConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000026 /* CalendarConnection.swift */; };
+		A10000000000000000000031 /* ConnectionNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000027 /* ConnectionNormalizer.swift */; };
+		A10000000000000000000032 /* ConnectionPasswordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000028 /* ConnectionPasswordStore.swift */; };
+		A10000000000000000000033 /* SharedKeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000029 /* SharedKeychainStore.swift */; };
+		A10000000000000000000034 /* CalendarSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000002A /* CalendarSyncService.swift */; };
+		A10000000000000000000035 /* CalendarItemOrdering.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000002B /* CalendarItemOrdering.swift */; };
+		A10000000000000000000036 /* WidgetSnapshotMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000002C /* WidgetSnapshotMapper.swift */; };
+		A10000000000000000000037 /* CalDAVPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000002D /* CalDAVPath.swift */; };
+		A10000000000000000000038 /* CalDAVXML.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000002E /* CalDAVXML.swift */; };
+		A10000000000000000000039 /* CalDAVDateFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000002F /* CalDAVDateFormatting.swift */; };
+		A1000000000000000000003A /* CalDAVError.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000030 /* CalDAVError.swift */; };
+		A1000000000000000000003B /* CalDAVTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000031 /* CalDAVTransport.swift */; };
+		A1000000000000000000003C /* GoogleAPITransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000032 /* GoogleAPITransport.swift */; };
+		A1000000000000000000003D /* CalendarStoreDependencies.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000033 /* CalendarStoreDependencies.swift */; };
+		A1000000000000000000003E /* ConnectionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000034 /* ConnectionRepository.swift */; };
+		A1000000000000000000003F /* ConnectionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000034 /* ConnectionRepository.swift */; };
+		A10000000000000000000040 /* SettingsFormState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000035 /* SettingsFormState.swift */; };
+		A10000000000000000000041 /* NaverCalendarEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000036 /* NaverCalendarEntry.swift */; };
+		A10000000000000000000042 /* WidgetDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000037 /* WidgetDesign.swift */; };
+		A10000000000000000000043 /* WidgetDateFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000038 /* WidgetDateFormatting.swift */; };
+		A10000000000000000000044 /* NaverCalendarWidgetEventCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000039 /* NaverCalendarWidgetEventCard.swift */; };
+		A10000000000000000000045 /* NaverCalendarWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000003A /* NaverCalendarWidgetView.swift */; };
+		A10000000000000000000046 /* ICSRecurrenceRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000003B /* ICSRecurrenceRule.swift */; };
+		A10000000000000000000047 /* CalendarSyncWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000003C /* CalendarSyncWindow.swift */; };
+		A10000000000000000000048 /* SyncTiming.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000003D /* SyncTiming.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -76,6 +119,46 @@
 		A20000000000000000000013 /* NaverCalendarWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NaverCalendarWidget.entitlements; sourceTree = "<group>"; };
 		A20000000000000000000014 /* ConnectionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStore.swift; sourceTree = "<group>"; };
 		A20000000000000000000015 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A20000000000000000000016 /* SharedCalendarPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCalendarPalette.swift; sourceTree = "<group>"; };
+		A20000000000000000000017 /* ScheduleSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleSearch.swift; sourceTree = "<group>"; };
+		A20000000000000000000018 /* MonthLayoutBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthLayoutBuilder.swift; sourceTree = "<group>"; };
+		A20000000000000000000019 /* GoogleOAuthCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleOAuthCoordinator.swift; sourceTree = "<group>"; };
+		A2000000000000000000001A /* GoogleCalendarClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleCalendarClient.swift; sourceTree = "<group>"; };
+		A2000000000000000000001B /* CalendarPopovers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarPopovers.swift; sourceTree = "<group>"; };
+		A2000000000000000000001C /* CalendarViewSurfaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarViewSurfaces.swift; sourceTree = "<group>"; };
+		A2000000000000000000001D /* EventSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventSheets.swift; sourceTree = "<group>"; };
+		A2000000000000000000001E /* SearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchSheet.swift; sourceTree = "<group>"; };
+		A2000000000000000000001F /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
+		A20000000000000000000020 /* CalendarDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarDesign.swift; sourceTree = "<group>"; };
+		A20000000000000000000021 /* CalendarBaseViewModifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarBaseViewModifiers.swift; sourceTree = "<group>"; };
+		A20000000000000000000022 /* CalendarValueParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarValueParser.swift; sourceTree = "<group>"; };
+		A20000000000000000000023 /* CalendarFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarFormatting.swift; sourceTree = "<group>"; };
+		A20000000000000000000024 /* CalendarPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarPalette.swift; sourceTree = "<group>"; };
+		A20000000000000000000025 /* CalendarText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarText.swift; sourceTree = "<group>"; };
+		A20000000000000000000026 /* CalendarConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarConnection.swift; sourceTree = "<group>"; };
+		A20000000000000000000027 /* ConnectionNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionNormalizer.swift; sourceTree = "<group>"; };
+		A20000000000000000000028 /* ConnectionPasswordStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionPasswordStore.swift; sourceTree = "<group>"; };
+		A20000000000000000000029 /* SharedKeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedKeychainStore.swift; sourceTree = "<group>"; };
+		A2000000000000000000002A /* CalendarSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSyncService.swift; sourceTree = "<group>"; };
+		A2000000000000000000002B /* CalendarItemOrdering.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarItemOrdering.swift; sourceTree = "<group>"; };
+		A2000000000000000000002C /* WidgetSnapshotMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotMapper.swift; sourceTree = "<group>"; };
+		A2000000000000000000002D /* CalDAVPath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalDAVPath.swift; sourceTree = "<group>"; };
+		A2000000000000000000002E /* CalDAVXML.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalDAVXML.swift; sourceTree = "<group>"; };
+		A2000000000000000000002F /* CalDAVDateFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalDAVDateFormatting.swift; sourceTree = "<group>"; };
+		A20000000000000000000030 /* CalDAVError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalDAVError.swift; sourceTree = "<group>"; };
+		A20000000000000000000031 /* CalDAVTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalDAVTransport.swift; sourceTree = "<group>"; };
+		A20000000000000000000032 /* GoogleAPITransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleAPITransport.swift; sourceTree = "<group>"; };
+		A20000000000000000000033 /* CalendarStoreDependencies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarStoreDependencies.swift; sourceTree = "<group>"; };
+		A20000000000000000000034 /* ConnectionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionRepository.swift; sourceTree = "<group>"; };
+		A20000000000000000000035 /* SettingsFormState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsFormState.swift; sourceTree = "<group>"; };
+		A20000000000000000000036 /* NaverCalendarEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaverCalendarEntry.swift; sourceTree = "<group>"; };
+		A20000000000000000000037 /* WidgetDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDesign.swift; sourceTree = "<group>"; };
+		A20000000000000000000038 /* WidgetDateFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDateFormatting.swift; sourceTree = "<group>"; };
+		A20000000000000000000039 /* NaverCalendarWidgetEventCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaverCalendarWidgetEventCard.swift; sourceTree = "<group>"; };
+		A2000000000000000000003A /* NaverCalendarWidgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaverCalendarWidgetView.swift; sourceTree = "<group>"; };
+		A2000000000000000000003B /* ICSRecurrenceRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICSRecurrenceRule.swift; sourceTree = "<group>"; };
+		A2000000000000000000003C /* CalendarSyncWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSyncWindow.swift; sourceTree = "<group>"; };
+		A2000000000000000000003D /* SyncTiming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncTiming.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -112,14 +195,49 @@
 			children = (
 				A20000000000000000000001 /* NaverCalDAVViewerApp.swift */,
 				A20000000000000000000002 /* CalDAVClient.swift */,
+				A2000000000000000000002F /* CalDAVDateFormatting.swift */,
+				A20000000000000000000030 /* CalDAVError.swift */,
+				A2000000000000000000002D /* CalDAVPath.swift */,
+				A20000000000000000000031 /* CalDAVTransport.swift */,
+				A2000000000000000000002E /* CalDAVXML.swift */,
+				A20000000000000000000021 /* CalendarBaseViewModifiers.swift */,
+				A20000000000000000000026 /* CalendarConnection.swift */,
+				A20000000000000000000020 /* CalendarDesign.swift */,
+				A20000000000000000000023 /* CalendarFormatting.swift */,
+				A2000000000000000000002B /* CalendarItemOrdering.swift */,
+				A20000000000000000000024 /* CalendarPalette.swift */,
 				A20000000000000000000003 /* CalendarStore.swift */,
+				A20000000000000000000033 /* CalendarStoreDependencies.swift */,
 				A20000000000000000000004 /* CalendarSupport.swift */,
+				A2000000000000000000002A /* CalendarSyncService.swift */,
+				A2000000000000000000003C /* CalendarSyncWindow.swift */,
+				A20000000000000000000025 /* CalendarText.swift */,
+				A20000000000000000000022 /* CalendarValueParser.swift */,
+				A2000000000000000000001B /* CalendarPopovers.swift */,
+				A2000000000000000000001C /* CalendarViewSurfaces.swift */,
 				A20000000000000000000005 /* ContentView.swift */,
 				A20000000000000000000014 /* ConnectionStore.swift */,
+				A20000000000000000000027 /* ConnectionNormalizer.swift */,
+				A20000000000000000000028 /* ConnectionPasswordStore.swift */,
+				A20000000000000000000034 /* ConnectionRepository.swift */,
+				A2000000000000000000001D /* EventSheets.swift */,
+				A20000000000000000000032 /* GoogleAPITransport.swift */,
+				A20000000000000000000019 /* GoogleOAuthCoordinator.swift */,
+				A2000000000000000000001A /* GoogleCalendarClient.swift */,
 				A20000000000000000000006 /* ICSParser.swift */,
+				A2000000000000000000003B /* ICSRecurrenceRule.swift */,
 				A20000000000000000000007 /* Models.swift */,
+				A20000000000000000000018 /* MonthLayoutBuilder.swift */,
 				A20000000000000000000008 /* MonthGridView.swift */,
+				A20000000000000000000017 /* ScheduleSearch.swift */,
+				A2000000000000000000001E /* SearchSheet.swift */,
+				A20000000000000000000035 /* SettingsFormState.swift */,
+				A2000000000000000000001F /* SettingsSheet.swift */,
+				A20000000000000000000029 /* SharedKeychainStore.swift */,
+				A20000000000000000000016 /* SharedCalendarPalette.swift */,
+				A2000000000000000000003D /* SyncTiming.swift */,
 				A20000000000000000000009 /* WidgetSnapshotStore.swift */,
+				A2000000000000000000002C /* WidgetSnapshotMapper.swift */,
 				A2000000000000000000000A /* MiniMonthNavigatorView.swift */,
 			);
 			path = Sources/NaverCalDAVViewer;
@@ -129,7 +247,12 @@
 			isa = PBXGroup;
 			children = (
 				A2000000000000000000000D /* NaverCalendarWidgetBundle.swift */,
+				A20000000000000000000036 /* NaverCalendarEntry.swift */,
 				A2000000000000000000000B /* NaverCalendarWidget.swift */,
+				A20000000000000000000039 /* NaverCalendarWidgetEventCard.swift */,
+				A2000000000000000000003A /* NaverCalendarWidgetView.swift */,
+				A20000000000000000000037 /* WidgetDesign.swift */,
+				A20000000000000000000038 /* WidgetDateFormatting.swift */,
 				A2000000000000000000000C /* WidgetSharedSnapshot.swift */,
 			);
 			path = WidgetExtension;
@@ -263,16 +386,51 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000002 /* CalDAVClient.swift in Sources */,
+				A10000000000000000000039 /* CalDAVDateFormatting.swift in Sources */,
+				A1000000000000000000003A /* CalDAVError.swift in Sources */,
+				A10000000000000000000037 /* CalDAVPath.swift in Sources */,
+				A1000000000000000000003B /* CalDAVTransport.swift in Sources */,
+				A10000000000000000000038 /* CalDAVXML.swift in Sources */,
+				A10000000000000000000027 /* CalendarBaseViewModifiers.swift in Sources */,
+				A1000000000000000000002C /* CalendarConnection.swift in Sources */,
+				A10000000000000000000026 /* CalendarDesign.swift in Sources */,
+				A10000000000000000000029 /* CalendarFormatting.swift in Sources */,
+				A10000000000000000000035 /* CalendarItemOrdering.swift in Sources */,
+				A1000000000000000000002A /* CalendarPalette.swift in Sources */,
+				A10000000000000000000021 /* CalendarPopovers.swift in Sources */,
 				A10000000000000000000003 /* CalendarStore.swift in Sources */,
+				A1000000000000000000003D /* CalendarStoreDependencies.swift in Sources */,
 				A10000000000000000000004 /* CalendarSupport.swift in Sources */,
+				A10000000000000000000034 /* CalendarSyncService.swift in Sources */,
+				A10000000000000000000047 /* CalendarSyncWindow.swift in Sources */,
+				A1000000000000000000002B /* CalendarText.swift in Sources */,
+				A10000000000000000000028 /* CalendarValueParser.swift in Sources */,
+				A10000000000000000000022 /* CalendarViewSurfaces.swift in Sources */,
 				A10000000000000000000005 /* ContentView.swift in Sources */,
 				A1000000000000000000000F /* ConnectionStore.swift in Sources */,
+				A1000000000000000000002D /* ConnectionNormalizer.swift in Sources */,
+				A1000000000000000000002E /* ConnectionPasswordStore.swift in Sources */,
+				A1000000000000000000003E /* ConnectionRepository.swift in Sources */,
+				A10000000000000000000023 /* EventSheets.swift in Sources */,
+				A1000000000000000000003C /* GoogleAPITransport.swift in Sources */,
+				A1000000000000000000001F /* GoogleCalendarClient.swift in Sources */,
+				A1000000000000000000001E /* GoogleOAuthCoordinator.swift in Sources */,
 				A10000000000000000000006 /* ICSParser.swift in Sources */,
+				A10000000000000000000046 /* ICSRecurrenceRule.swift in Sources */,
 				A1000000000000000000000A /* MiniMonthNavigatorView.swift in Sources */,
 				A10000000000000000000007 /* Models.swift in Sources */,
+				A1000000000000000000001D /* MonthLayoutBuilder.swift in Sources */,
 				A10000000000000000000008 /* MonthGridView.swift in Sources */,
 				A10000000000000000000001 /* NaverCalDAVViewerApp.swift in Sources */,
+				A1000000000000000000001C /* ScheduleSearch.swift in Sources */,
+				A10000000000000000000024 /* SearchSheet.swift in Sources */,
+				A10000000000000000000040 /* SettingsFormState.swift in Sources */,
+				A10000000000000000000025 /* SettingsSheet.swift in Sources */,
+				A1000000000000000000002F /* SharedKeychainStore.swift in Sources */,
+				A1000000000000000000001B /* SharedCalendarPalette.swift in Sources */,
+				A10000000000000000000048 /* SyncTiming.swift in Sources */,
 				A10000000000000000000009 /* WidgetSnapshotStore.swift in Sources */,
+				A10000000000000000000036 /* WidgetSnapshotMapper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -280,13 +438,21 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000000000000000000015 /* CalDAVClient.swift in Sources */,
-				A10000000000000000000016 /* CalendarSupport.swift in Sources */,
 				A10000000000000000000017 /* ConnectionStore.swift in Sources */,
-				A10000000000000000000018 /* ICSParser.swift in Sources */,
+				A10000000000000000000030 /* CalendarConnection.swift in Sources */,
+				A10000000000000000000031 /* ConnectionNormalizer.swift in Sources */,
+				A10000000000000000000032 /* ConnectionPasswordStore.swift in Sources */,
+				A1000000000000000000003F /* ConnectionRepository.swift in Sources */,
 				A10000000000000000000019 /* Models.swift in Sources */,
+				A10000000000000000000041 /* NaverCalendarEntry.swift in Sources */,
 				A1000000000000000000000B /* NaverCalendarWidget.swift in Sources */,
 				A1000000000000000000000D /* NaverCalendarWidgetBundle.swift in Sources */,
+				A10000000000000000000044 /* NaverCalendarWidgetEventCard.swift in Sources */,
+				A10000000000000000000045 /* NaverCalendarWidgetView.swift in Sources */,
+				A10000000000000000000033 /* SharedKeychainStore.swift in Sources */,
+				A10000000000000000000020 /* SharedCalendarPalette.swift in Sources */,
+				A10000000000000000000042 /* WidgetDesign.swift in Sources */,
+				A10000000000000000000043 /* WidgetDateFormatting.swift in Sources */,
 				A1000000000000000000000C /* WidgetSharedSnapshot.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

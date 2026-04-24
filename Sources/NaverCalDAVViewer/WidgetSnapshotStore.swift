@@ -1,10 +1,10 @@
 import Foundation
 #if canImport(WidgetKit)
-import WidgetKit
+    import WidgetKit
 #endif
 
-// App-side widget snapshot writer. The app owns network/auth and writes a flattened
-// snapshot; the widget only reads this data for stable refreshes.
+/// App-side widget snapshot writer. The app owns network/auth and writes a flattened
+/// snapshot; the widget only reads this data for stable refreshes.
 enum WidgetSnapshotStore {
     static let appGroupID = "group.calendar.naver.viewer"
     static let widgetKind = "NaverCalendarWidget"
@@ -19,7 +19,8 @@ enum WidgetSnapshotStore {
 
     static func load() -> [WidgetEventSnapshot] {
         guard let data = try? Data(contentsOf: localSnapshotURL()),
-              let items = try? JSONDecoder().decode([WidgetEventSnapshot].self, from: data) else {
+              let items = try? JSONDecoder().decode([WidgetEventSnapshot].self, from: data)
+        else {
             return []
         }
         return items
@@ -34,8 +35,8 @@ enum WidgetSnapshotStore {
 
     static func refreshWidgets() {
         #if canImport(WidgetKit)
-        WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
-        WidgetCenter.shared.reloadAllTimelines()
+            WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
+            WidgetCenter.shared.reloadAllTimelines()
         #endif
     }
 }

@@ -1,16 +1,23 @@
 import Foundation
 
-// Basic Auth CalDAV client for manual email-server accounts, especially Naver.
-// Google Calendar intentionally uses GoogleCalendarClient instead of this path.
+/// Basic Auth CalDAV client for manual email-server accounts, especially Naver.
+/// Google Calendar intentionally uses GoogleCalendarClient instead of this path.
 struct CalDAVClient {
     let username: String
     let appPassword: String
     let baseURL: URL
+    private let transport: any CalDAVTransport
 
-    init(username: String, appPassword: String, serverURL: String = "https://caldav.calendar.naver.com") {
+    init(
+        username: String,
+        appPassword: String,
+        serverURL: String = "https://caldav.calendar.naver.com",
+        transport: any CalDAVTransport = URLSessionCalDAVTransport()
+    ) {
         self.username = username
         self.appPassword = appPassword
-        self.baseURL = Self.normalizedBaseURL(serverURL)
+        self.transport = transport
+        baseURL = CalDAVPath.normalizedBaseURL(serverURL)
     }
 
     private var normalizedUsername: String {
@@ -20,16 +27,16 @@ struct CalDAVClient {
     }
 
     private var authUsername: String {
-        let trimmed = normalizedUsername
-        return trimmed
+        normalizedUsername
     }
 
     func fetchCalendarItems(rangeStart: Date? = nil, rangeEnd: Date? = nil) async throws -> FetchResult {
+        let totalTimer = SyncTimer()
         var diagnostics: [String] = []
         diagnostics.append("Auth username: \(authUsername)")
         diagnostics.append("Server: \(baseURL.absoluteString)")
-        diagnostics.append("Manual principal path: \(fallbackPrincipalPath())")
-        diagnostics.append("Manual calendar home path: \(fallbackCalendarHomePath())")
+        diagnostics.append("Manual principal path: \(CalDAVPath.fallbackPrincipalPath(username: normalizedUsername))")
+        diagnostics.append("Manual calendar home path: \(CalDAVPath.fallbackCalendarHomePath(username: normalizedUsername))")
 
         if let directCalendarPath {
             diagnostics.append("Trying direct calendar path: \(directCalendarPath)")
@@ -52,7 +59,7 @@ struct CalDAVClient {
 
         let homePath: String
         do {
-            let manualPrincipal = fallbackPrincipalPath()
+            let manualPrincipal = CalDAVPath.fallbackPrincipalPath(username: normalizedUsername)
             diagnostics.append("Trying manual principal path first")
             homePath = try await discoverCalendarHomePath(principalPath: manualPrincipal, diagnostics: &diagnostics)
         } catch {
@@ -76,75 +83,30 @@ struct CalDAVClient {
         }
 
         diagnostics.append("Using calendar home path: \(homePath)")
+        let discoveryTimer = SyncTimer()
         let calendars = try await discoverCalendarCollections(homePath: homePath, diagnostics: &diagnostics)
         diagnostics.append("Discovered calendar collections: \(calendars.count)")
+        diagnostics.append(discoveryTimer.line("CalDAV calendar discovery"))
 
-        var merged: [CalendarItem] = []
-        for calendar in calendars {
-            let components = calendar.supportedComponents.sorted().joined(separator: ",")
-            diagnostics.append("Calendar: \(calendar.displayName) components=\(components) path=\(calendar.href)")
-            if calendar.supportedComponents.contains("VEVENT") {
-                let icsList: [String]
-                if let rangeStart, let rangeEnd {
-                    icsList = try await queryCalendarData(
-                        calendarPath: calendar.href,
-                        component: "VEVENT",
-                        rangeStart: rangeStart,
-                        rangeEnd: rangeEnd,
-                        diagnostics: &diagnostics
-                    )
-                } else {
-                    icsList = try await queryCalendarDataWithoutTimeRange(
-                        calendarPath: calendar.href,
-                        component: "VEVENT",
-                        diagnostics: &diagnostics
-                    )
-                }
-                merged.append(contentsOf: icsList.flatMap { ICSParser.parseItems(from: $0, calendarName: calendar.displayName) })
-            }
-
-            if calendar.supportedComponents.contains("VTODO") {
-                let icsList: [String]
-                if let rangeStart, let rangeEnd {
-                    icsList = try await queryCalendarData(
-                        calendarPath: calendar.href,
-                        component: "VTODO",
-                        rangeStart: rangeStart,
-                        rangeEnd: rangeEnd,
-                        diagnostics: &diagnostics
-                    )
-                } else {
-                    icsList = try await queryCalendarDataWithoutTimeRange(
-                        calendarPath: calendar.href,
-                        component: "VTODO",
-                        diagnostics: &diagnostics
-                    )
-                }
-                merged.append(contentsOf: icsList.flatMap { ICSParser.parseItems(from: $0, calendarName: calendar.displayName) })
-            }
-        }
+        let calendarResults = try await fetchCalendarCollectionsInParallel(
+            calendars: calendars,
+            rangeStart: rangeStart,
+            rangeEnd: rangeEnd,
+            useTimeRange: rangeStart != nil && rangeEnd != nil
+        )
+        diagnostics.append(contentsOf: calendarResults.flatMap(\.diagnostics))
+        var merged = calendarResults.flatMap(\.items)
 
         if merged.isEmpty {
             diagnostics.append("No items with time-range filter, retrying without time-range")
-            for calendar in calendars {
-                if calendar.supportedComponents.contains("VEVENT") {
-                    let icsList = try await queryCalendarDataWithoutTimeRange(
-                        calendarPath: calendar.href,
-                        component: "VEVENT",
-                        diagnostics: &diagnostics
-                    )
-                    merged.append(contentsOf: icsList.flatMap { ICSParser.parseItems(from: $0, calendarName: calendar.displayName) })
-                }
-
-                if calendar.supportedComponents.contains("VTODO") {
-                    let icsList = try await queryCalendarDataWithoutTimeRange(
-                        calendarPath: calendar.href,
-                        component: "VTODO",
-                        diagnostics: &diagnostics
-                    )
-                    merged.append(contentsOf: icsList.flatMap { ICSParser.parseItems(from: $0, calendarName: calendar.displayName) })
-                }
-            }
+            let fallbackResults = try await fetchCalendarCollectionsInParallel(
+                calendars: calendars,
+                rangeStart: nil,
+                rangeEnd: nil,
+                useTimeRange: false
+            )
+            diagnostics.append(contentsOf: fallbackResults.flatMap(\.diagnostics))
+            merged = fallbackResults.flatMap(\.items)
         }
 
         let items = merged.sorted { lhs, rhs in
@@ -155,11 +117,118 @@ struct CalDAVClient {
         }
 
         diagnostics.append("Parsed items: \(items.count)")
+        diagnostics.append(totalTimer.line("CalDAV total"))
         return FetchResult(items: items, diagnostics: diagnostics)
     }
 
+    private func fetchCalendarCollectionsInParallel(
+        calendars: [CalendarCollection],
+        rangeStart: Date?,
+        rangeEnd: Date?,
+        useTimeRange: Bool
+    ) async throws -> [CalDAVCalendarFetchResult] {
+        try await withThrowingTaskGroup(of: CalDAVCalendarFetchResult.self) { group in
+            for (index, calendar) in calendars.enumerated() {
+                group.addTask {
+                    try await fetchCalendarCollection(
+                        calendar: calendar,
+                        index: index,
+                        rangeStart: rangeStart,
+                        rangeEnd: rangeEnd,
+                        useTimeRange: useTimeRange
+                    )
+                }
+            }
+
+            var results: [CalDAVCalendarFetchResult] = []
+            for try await result in group {
+                results.append(result)
+            }
+            return results.sorted { $0.index < $1.index }
+        }
+    }
+
+    private func fetchCalendarCollection(
+        calendar: CalendarCollection,
+        index: Int,
+        rangeStart: Date?,
+        rangeEnd: Date?,
+        useTimeRange: Bool
+    ) async throws -> CalDAVCalendarFetchResult {
+        let timer = SyncTimer()
+        var diagnostics: [String] = []
+        var merged: [CalendarItem] = []
+        let queryRange: (start: Date, end: Date)? = if useTimeRange, let rangeStart, let rangeEnd {
+            (rangeStart, rangeEnd)
+        } else {
+            nil
+        }
+        let components = calendar.supportedComponents.sorted().joined(separator: ",")
+        diagnostics.append("Calendar: \(calendar.displayName) components=\(components) path=\(calendar.href)")
+
+        if calendar.supportedComponents.contains("VEVENT") {
+            let icsList = try await queryCalendarDataForComponent(
+                calendarPath: calendar.href,
+                component: "VEVENT",
+                range: queryRange,
+                diagnostics: &diagnostics
+            )
+            merged.append(contentsOf: icsList.flatMap { ics in
+                ICSParser.parseItems(
+                    from: ics,
+                    calendarName: calendar.displayName,
+                    rangeStart: queryRange?.start,
+                    rangeEnd: queryRange?.end
+                )
+            })
+        }
+
+        if calendar.supportedComponents.contains("VTODO") {
+            let icsList = try await queryCalendarDataForComponent(
+                calendarPath: calendar.href,
+                component: "VTODO",
+                range: queryRange,
+                diagnostics: &diagnostics
+            )
+            merged.append(contentsOf: icsList.flatMap { ics in
+                ICSParser.parseItems(
+                    from: ics,
+                    calendarName: calendar.displayName,
+                    rangeStart: queryRange?.start,
+                    rangeEnd: queryRange?.end
+                )
+            })
+        }
+
+        diagnostics.append(timer.line("CalDAV calendar \(calendar.displayName)"))
+        return CalDAVCalendarFetchResult(index: index, items: merged, diagnostics: diagnostics)
+    }
+
+    private func queryCalendarDataForComponent(
+        calendarPath: String,
+        component: String,
+        range: (start: Date, end: Date)?,
+        diagnostics: inout [String]
+    ) async throws -> [String] {
+        if let range {
+            return try await queryCalendarData(
+                calendarPath: calendarPath,
+                component: component,
+                rangeStart: range.start,
+                rangeEnd: range.end,
+                diagnostics: &diagnostics
+            )
+        }
+
+        return try await queryCalendarDataWithoutTimeRange(
+            calendarPath: calendarPath,
+            component: component,
+            diagnostics: &diagnostics
+        )
+    }
+
     private var directCalendarPath: String? {
-        let path = normalizePath(baseURL.path)
+        let path = CalDAVPath.normalize(baseURL.path)
         if path.lowercased().hasSuffix("/events") || path.lowercased().hasSuffix("/events/") {
             return path
         }
@@ -167,7 +236,7 @@ struct CalDAVClient {
         if baseURL.host?.lowercased().contains("googleusercontent.com") == true {
             let basePath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             let prefix = basePath.isEmpty ? "caldav/v2" : basePath
-            return "/\(prefix)/\(encodedPathSegment(authUsername))/events/"
+            return "/\(prefix)/\(CalDAVPath.encodedPathSegment(authUsername))/events/"
         }
 
         return nil
@@ -179,9 +248,8 @@ struct CalDAVClient {
         rangeEnd: Date?,
         diagnostics: inout [String]
     ) async throws -> [CalendarItem] {
-        let eventData: [String]
-        if let rangeStart, let rangeEnd {
-            eventData = try await queryCalendarData(
+        let eventData: [String] = if let rangeStart, let rangeEnd {
+            try await queryCalendarData(
                 calendarPath: calendarPath,
                 component: "VEVENT",
                 rangeStart: rangeStart,
@@ -189,31 +257,16 @@ struct CalDAVClient {
                 diagnostics: &diagnostics
             )
         } else {
-            eventData = try await queryCalendarDataWithoutTimeRange(
+            try await queryCalendarDataWithoutTimeRange(
                 calendarPath: calendarPath,
                 component: "VEVENT",
                 diagnostics: &diagnostics
             )
         }
 
-        return eventData.flatMap {
-            ICSParser.parseItems(from: $0, calendarName: authUsername)
+        return eventData.flatMap { ics in
+            ICSParser.parseItems(from: ics, calendarName: authUsername, rangeStart: rangeStart, rangeEnd: rangeEnd)
         }
-    }
-
-    private static func normalizedBaseURL(_ value: String) -> URL {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        let withScheme = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
-        let normalized = withScheme.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        if let url = URL(string: normalized),
-           let host = url.host?.lowercased(),
-           (host == "www.google.com" && url.path.lowercased().hasPrefix("/calendar/dav") ||
-            host == "calendar.google.com" && url.path.lowercased().contains("calendar/dav")) {
-            return URL(string: "https://apidata.googleusercontent.com/caldav/v2")!
-        }
-
-        return URL(string: normalized) ??
-            URL(string: "https://caldav.calendar.naver.com")!
     }
 
     private func discoverPrincipalPath(diagnostics: inout [String]) async throws -> String {
@@ -227,14 +280,13 @@ struct CalDAVClient {
         """
 
         let data = try await send(path: "/", method: "PROPFIND", depth: "0", body: body, diagnostics: &diagnostics)
-        let xml = String(decoding: data, as: UTF8.self)
+        let xml = String(bytes: data, encoding: .utf8) ?? ""
 
-        guard let principalBlock = firstMatch(in: xml, pattern: #"<[^>]*current-user-principal[^>]*>([\s\S]*?)</[^>]*current-user-principal>"#),
-              let href = firstMatch(in: principalBlock, pattern: #"<[^>]*href[^>]*>([\s\S]*?)</[^>]*href>"#) else {
+        guard let href = CalDAVXML.firstCurrentUserPrincipalHref(from: xml) else {
             throw CalDAVError.parse("current-user-principal href not found")
         }
 
-        return normalizePath(decodeXMLText(href))
+        return CalDAVPath.normalize(href)
     }
 
     private func discoverCalendarHomePath(principalPath: String, diagnostics: inout [String]) async throws -> String {
@@ -248,14 +300,13 @@ struct CalDAVClient {
         """
 
         let data = try await send(path: principalPath, method: "PROPFIND", depth: "0", body: body, diagnostics: &diagnostics)
-        let xml = String(decoding: data, as: UTF8.self)
+        let xml = String(bytes: data, encoding: .utf8) ?? ""
 
-        guard let homeBlock = firstMatch(in: xml, pattern: #"<[^>]*calendar-home-set[^>]*>([\s\S]*?)</[^>]*calendar-home-set>"#),
-              let href = firstMatch(in: homeBlock, pattern: #"<[^>]*href[^>]*>([\s\S]*?)</[^>]*href>"#) else {
+        guard let href = CalDAVXML.firstCalendarHomeSetHref(from: xml) else {
             throw CalDAVError.parse("calendar-home-set href not found")
         }
 
-        return normalizePath(decodeXMLText(href))
+        return CalDAVPath.normalize(href)
     }
 
     private func discoverCalendarCollections(homePath: String, diagnostics: inout [String]) async throws -> [CalendarCollection] {
@@ -271,37 +322,26 @@ struct CalDAVClient {
         """
 
         let data = try await send(path: homePath, method: "PROPFIND", depth: "1", body: body, diagnostics: &diagnostics)
-        let xml = String(decoding: data, as: UTF8.self)
+        let xml = String(bytes: data, encoding: .utf8) ?? ""
 
-        let responseBlocks = allMatches(in: xml, pattern: #"<[^>]*response[^>]*>([\s\S]*?)</[^>]*response>"#)
         var results: [CalendarCollection] = []
 
-        for block in responseBlocks {
-            guard let hrefRaw = firstMatch(in: block, pattern: #"<[^>]*href[^>]*>([\s\S]*?)</[^>]*href>"#) else {
+        for response in CalDAVXML.responses(from: xml) {
+            guard let hrefRaw = response.hrefs.first else {
                 continue
             }
 
-            let href = normalizePath(decodeXMLText(hrefRaw))
-            if href == normalizePath(homePath) {
+            let href = CalDAVPath.normalize(hrefRaw)
+            if href == CalDAVPath.normalize(homePath) {
                 continue
             }
 
-            let hasCalendarTag =
-                block.range(of: #"<[^>]*calendar\s*/>"#, options: .regularExpression) != nil ||
-                block.range(of: #"<[^>]*calendar[^>]*>[\s\S]*?</[^>]*calendar>"#, options: .regularExpression) != nil
-            if !hasCalendarTag {
+            if !response.isCalendar {
                 continue
             }
 
-            let displayRaw = firstMatch(in: block, pattern: #"<[^>]*displayname[^>]*>([\s\S]*?)</[^>]*displayname>"#) ?? href
-            let displayName = decodeXMLText(displayRaw).trimmingCharacters(in: .whitespacesAndNewlines)
-
-            let compNames = Set(
-                allMatches(in: block, pattern: #"<[^>]*comp[^>]*name=\"([^\"]+)\"[^>]*/?>"#)
-                    .map { $0.uppercased() }
-            )
-
-            let components = compNames.isEmpty ? Set(["VEVENT", "VTODO"]) : compNames
+            let displayName = response.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? href
+            let components = response.componentNames.isEmpty ? Set(["VEVENT", "VTODO"]) : response.componentNames
             results.append(
                 CalendarCollection(
                     href: href,
@@ -324,8 +364,8 @@ struct CalDAVClient {
         rangeEnd: Date,
         diagnostics: inout [String]
     ) async throws -> [String] {
-        let start = Self.utcStamp(rangeStart)
-        let end = Self.utcStamp(rangeEnd)
+        let start = CalDAVDateFormatting.utcStamp(rangeStart)
+        let end = CalDAVDateFormatting.utcStamp(rangeEnd)
 
         let body = """
         <?xml version="1.0" encoding="utf-8" ?>
@@ -345,8 +385,8 @@ struct CalDAVClient {
         """
 
         let data = try await send(path: calendarPath, method: "REPORT", depth: "1", body: body, diagnostics: &diagnostics)
-        let xml = String(decoding: data, as: UTF8.self)
-        let extracted = extractCalendarData(from: xml)
+        let xml = String(bytes: data, encoding: .utf8) ?? ""
+        let extracted = CalDAVXML.extractCalendarData(from: xml)
         diagnostics.append("calendar-query \(component) calendar-data count: \(extracted.count)")
         if !extracted.isEmpty {
             return extracted
@@ -380,8 +420,8 @@ struct CalDAVClient {
         """
 
         let data = try await send(path: calendarPath, method: "REPORT", depth: "1", body: body, diagnostics: &diagnostics)
-        let xml = String(decoding: data, as: UTF8.self)
-        let extracted = extractCalendarData(from: xml)
+        let xml = String(bytes: data, encoding: .utf8) ?? ""
+        let extracted = CalDAVXML.extractCalendarData(from: xml)
         diagnostics.append("calendar-query(no-range) \(component) calendar-data count: \(extracted.count)")
         if !extracted.isEmpty {
             return extracted
@@ -408,12 +448,12 @@ struct CalDAVClient {
         }
 
         let chunks = stride(from: 0, to: objectPaths.count, by: 50).map {
-            Array(objectPaths[$0..<min($0 + 50, objectPaths.count)])
+            Array(objectPaths[$0 ..< min($0 + 50, objectPaths.count)])
         }
 
         var merged: [String] = []
         for chunk in chunks {
-            merged.append(contentsOf: try await multigetCalendarObjects(paths: chunk, diagnostics: &diagnostics))
+            try await merged.append(contentsOf: multigetCalendarObjects(paths: chunk, diagnostics: &diagnostics))
         }
         return merged
     }
@@ -433,28 +473,21 @@ struct CalDAVClient {
         """
 
         let data = try await send(path: calendarPath, method: "PROPFIND", depth: "1", body: body, diagnostics: &diagnostics)
-        let xml = String(decoding: data, as: UTF8.self)
-        let responseBlocks = allMatches(in: xml, pattern: #"<[^>]*response[^>]*>([\s\S]*?)</[^>]*response>"#)
+        let xml = String(bytes: data, encoding: .utf8) ?? ""
         var paths: [String] = []
 
-        for block in responseBlocks {
-            guard let hrefRaw = firstMatch(in: block, pattern: #"<[^>]*href[^>]*>([\s\S]*?)</[^>]*href>"#) else {
+        for response in CalDAVXML.responses(from: xml) {
+            guard let hrefRaw = response.hrefs.first else {
                 continue
             }
 
-            let href = normalizePath(decodeXMLText(hrefRaw))
-            if href == normalizePath(calendarPath) {
+            let href = CalDAVPath.normalize(hrefRaw)
+            if href == CalDAVPath.normalize(calendarPath) {
                 continue
             }
 
-            let contentType = firstMatch(in: block, pattern: #"<[^>]*getcontenttype[^>]*>([\s\S]*?)</[^>]*getcontenttype>"#)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .lowercased() ?? ""
-            let isCollection =
-                block.range(of: #"<[^>]*collection\s*/>"#, options: .regularExpression) != nil ||
-                block.range(of: #"<[^>]*collection[^>]*>[\s\S]*?</[^>]*collection>"#, options: .regularExpression) != nil
-
-            if isCollection {
+            let contentType = response.contentType?.lowercased() ?? ""
+            if response.isCollection {
                 continue
             }
 
@@ -482,167 +515,40 @@ struct CalDAVClient {
         </c:calendar-multiget>
         """
 
-        let basePath = paths.first.flatMap(parentPath) ?? "/"
+        let basePath = paths.first.flatMap(CalDAVPath.parentPath) ?? "/"
         let data = try await send(path: basePath, method: "REPORT", depth: "1", body: body, diagnostics: &diagnostics)
-        let xml = String(decoding: data, as: UTF8.self)
-        let extracted = extractCalendarData(from: xml)
+        let xml = String(bytes: data, encoding: .utf8) ?? ""
+        let extracted = CalDAVXML.extractCalendarData(from: xml)
         diagnostics.append("calendar-multiget returned calendar-data count: \(extracted.count)")
         return extracted
     }
 
     private func send(path: String, method: String, depth: String, body: String, diagnostics: inout [String]) async throws -> Data {
-        let url = urlFrom(path: path)
+        let url = CalDAVPath.url(from: path, baseURL: baseURL)
         diagnostics.append("\(method) \(url.absoluteString) depth=\(depth)")
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        request.setValue(depth, forHTTPHeaderField: "Depth")
-        request.setValue("application/xml; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        let request = CalDAVRequest(
+            url: url,
+            method: method,
+            depth: depth,
+            body: body,
+            username: authUsername,
+            password: appPassword
+        )
+        let response = try await transport.send(request)
+        diagnostics.append("-> HTTP \(response.statusCode)")
 
-        let login = "\(authUsername):\(appPassword)"
-        guard let loginData = login.data(using: .utf8) else {
-            throw CalDAVError.auth("failed to encode credentials")
-        }
-        let token = loginData.base64EncodedString()
-        request.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
-        request.httpBody = body.data(using: .utf8)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw CalDAVError.network("invalid HTTP response")
-        }
-        diagnostics.append("-> HTTP \(http.statusCode)")
-
-        guard (200...299).contains(http.statusCode) else {
-            let bodyText = String(data: data, encoding: .utf8) ?? ""
+        guard (200 ... 299).contains(response.statusCode) else {
+            let bodyText = String(data: response.data, encoding: .utf8) ?? ""
             diagnostics.append("-> Body \(bodyText.prefix(200))")
-            throw CalDAVError.http(http.statusCode, bodyText)
+            throw CalDAVError.http(response.statusCode, bodyText)
         }
 
-        return data
-    }
-
-    private func urlFrom(path: String) -> URL {
-        if let absolute = URL(string: path), absolute.scheme != nil {
-            return absolute
-        }
-        let normalized = normalizePath(path)
-        return baseURL.appendingPathComponent(String(normalized.dropFirst()))
-    }
-
-    private func normalizePath(_ input: String) -> String {
-        if input.hasPrefix("http://") || input.hasPrefix("https://") {
-            if let url = URL(string: input), let path = url.path.removingPercentEncoding {
-                return path.hasPrefix("/") ? path : "/\(path)"
-            }
-        }
-
-        let plain = input.removingPercentEncoding ?? input
-        if plain.hasPrefix("/") {
-            return plain
-        }
-        return "/\(plain)"
-    }
-
-    private func fallbackPrincipalPath() -> String {
-        let user = normalizedUsername
-        let idOnly = user.split(separator: "@", maxSplits: 1, omittingEmptySubsequences: true).first.map(String.init) ?? user
-        return "/principals/users/\(encodedPathSegment(idOnly))"
-    }
-
-    private func fallbackCalendarHomePath() -> String {
-        let user = normalizedUsername
-        let idOnly = user.split(separator: "@", maxSplits: 1, omittingEmptySubsequences: true).first.map(String.init) ?? user
-        return "/calendars/users/\(encodedPathSegment(idOnly))/"
-    }
-
-    private func encodedPathSegment(_ value: String) -> String {
-        value.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? value
-    }
-
-    private func parentPath(of path: String) -> String? {
-        let normalized = normalizePath(path)
-        guard let slashIndex = normalized.lastIndex(of: "/"), slashIndex > normalized.startIndex else {
-            return nil
-        }
-        return String(normalized[..<slashIndex]) + "/"
-    }
-
-    private func firstMatch(in text: String, pattern: String) -> String? {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
-            return nil
-        }
-        let range = NSRange(location: 0, length: text.utf16.count)
-        guard let match = regex.firstMatch(in: text, options: [], range: range), match.numberOfRanges > 1,
-              let valueRange = Range(match.range(at: 1), in: text) else {
-            return nil
-        }
-        return String(text[valueRange])
-    }
-
-    private func allMatches(in text: String, pattern: String) -> [String] {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
-            return []
-        }
-
-        let range = NSRange(location: 0, length: text.utf16.count)
-        let matches = regex.matches(in: text, options: [], range: range)
-
-        return matches.compactMap { match in
-            guard match.numberOfRanges > 1,
-                  let valueRange = Range(match.range(at: 1), in: text) else {
-                return nil
-            }
-            return String(text[valueRange])
-        }
-    }
-
-    private func decodeXMLText(_ value: String) -> String {
-        var decoded = value
-        decoded = decoded.replacingOccurrences(of: "&lt;", with: "<")
-        decoded = decoded.replacingOccurrences(of: "&gt;", with: ">")
-        decoded = decoded.replacingOccurrences(of: "&quot;", with: "\"")
-        decoded = decoded.replacingOccurrences(of: "&apos;", with: "'")
-        decoded = decoded.replacingOccurrences(of: "&amp;", with: "&")
-        return decoded
-    }
-
-    private func extractCalendarData(from xml: String) -> [String] {
-        allMatches(in: xml, pattern: #"<[^>]*calendar-data[^>]*>([\s\S]*?)</[^>]*calendar-data>"#)
-            .map { decodeXMLText($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-    }
-
-    private static func utcStamp(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd'T'HHmmss'Z'"
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        return formatter.string(from: date)
+        return response.data
     }
 }
 
-enum CalDAVError: LocalizedError {
-    case auth(String)
-    case network(String)
-    case parse(String)
-    case http(Int, String)
-    case diagnostic(String, [String])
-
-    var errorDescription: String? {
-        switch self {
-        case .auth(let message):
-            return "Auth error: \(message)"
-        case .network(let message):
-            return "Network error: \(message)"
-        case .parse(let message):
-            return "Parse error: \(message)"
-        case .http(let status, let body):
-            if body.isEmpty {
-                return "HTTP error: status=\(status)"
-            }
-            return "HTTP error: status=\(status), body=\(body.prefix(300))"
-        case .diagnostic(let message, let diagnostics):
-            return ([message] + diagnostics).joined(separator: "\n")
-        }
-    }
+private struct CalDAVCalendarFetchResult {
+    let index: Int
+    let items: [CalendarItem]
+    let diagnostics: [String]
 }

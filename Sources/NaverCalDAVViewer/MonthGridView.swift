@@ -1,12 +1,21 @@
+import AppKit
 import SwiftUI
 
-// Scrolling month calendar. Handles week-level event lane layout, selected-date glow,
-// and compact-window scaling for dates, event bars, and row height.
+/// Scrolling month calendar. Handles week-level event lane layout, selected-date glow,
+/// and compact-window scaling for dates, event bars, and row height.
 struct MonthGridView: View {
     @ObservedObject var store: CalendarStore
 
     @State private var sections: [MonthSectionModel] = []
-    private let anchorMonth = Self.monthStart(for: Date())
+    /// Button-driven month jumps also change the scroll position. While that
+    /// animation is running, ignore visible-month preference updates so the scroll
+    /// detector does not fight the requested month.
+    @State private var isProgrammaticMonthScroll = false
+    // Fast repeated chevron taps should land on the final requested month instead
+    // of queuing several overlapping ScrollViewReader animations.
+    @State private var pendingProgrammaticScroll: DispatchWorkItem?
+    private let layoutBuilder = MonthLayoutBuilder()
+    private let anchorMonth = MonthLayoutBuilder().monthStart(for: Date())
 
     private let weekdayLabels = ["일", "월", "화", "수", "목", "금", "토"]
     private let visibleLaneCount = 4
@@ -15,84 +24,106 @@ struct MonthGridView: View {
         GeometryReader { outer in
             let scale = layoutScale(for: outer.size.width)
             ScrollViewReader { proxy in
-            VStack(spacing: 0) {
-                weekdayHeader(scale: scale)
-                    .padding(.horizontal, 10 * scale)
-                    .padding(.top, 10 * scale)
-                    .padding(.bottom, 4)
+                VStack(spacing: 0) {
+                    weekdayHeader(scale: scale)
 
-                ScrollView {
-                    LazyVStack(spacing: 0, pinnedViews: []) {
-                        ForEach(sections) { section in
-                            MonthSectionView(
-                                section: section,
-                                selectedDate: store.selectedDate,
-                                visibleLaneCount: visibleLaneCount,
-                                scale: scale,
-                                openDay: store.openDay
-                            )
-                            .id(section.monthStart)
-                            .background(
-                                GeometryReader { geo in
-                                    Color.clear.preference(
-                                        key: VisibleMonthPreferenceKey.self,
-                                        value: [
-                                            VisibleMonthInfo(
-                                                monthStart: section.monthStart,
-                                                minY: geo.frame(in: .named("calendar-scroll")).minY
-                                            )
-                                        ]
-                                    )
-                                }
-                            )
+                    ScrollView {
+                        LazyVStack(spacing: 0, pinnedViews: []) {
+                            ForEach(sections) { section in
+                                MonthSectionView(
+                                    section: section,
+                                    selectedDate: store.selectedDate,
+                                    visibleLaneCount: visibleLaneCount,
+                                    scale: scale,
+                                    openDay: store.openDay
+                                )
+                                .id(section.monthStart)
+                                .background(
+                                    GeometryReader { geo in
+                                        Color.clear.preference(
+                                            key: VisibleMonthPreferenceKey.self,
+                                            value: [
+                                                VisibleMonthInfo(
+                                                    monthStart: section.monthStart,
+                                                    minY: geo.frame(in: .named("calendar-scroll")).minY
+                                                ),
+                                            ]
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.bottom, 24 * scale)
+                    }
+                    .coordinateSpace(name: "calendar-scroll")
+                }
+                .background(calendarTableBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .stroke(CalendarDesign.divider, lineWidth: 1)
+                )
+                .onPreferenceChange(VisibleMonthPreferenceKey.self) { values in
+                    guard !isProgrammaticMonthScroll else { return }
+                    guard let closest = values.min(by: { abs($0.minY) < abs($1.minY) }) else { return }
+                    let distance = abs(closest.minY)
+                    if distance < 180,
+                       !Calendar.current.isDate(closest.monthStart, equalTo: store.displayedMonth, toGranularity: .month)
+                    {
+                        expandSectionsIfNeeded(around: closest.monthStart)
+                        store.updateDisplayedMonthFromScroll(closest.monthStart)
+                    }
+                }
+                .onChange(of: store.displayedMonth) { month in
+                    expandSectionsIfNeeded(around: month)
+                }
+                .onAppear {
+                    rebuildSections()
+                    DispatchQueue.main.async {
+                        let target = store.requestedVisibleMonth ?? todayMonthStart
+                        proxy.scrollTo(target, anchor: .top)
+                        store.updateDisplayedMonthFromScroll(target)
+                    }
+                }
+                .onChange(of: store.layoutRevision) { _ in
+                    rebuildSections()
+                    DispatchQueue.main.async {
+                        let target = store.requestedVisibleMonth ?? store.displayedMonth
+                        proxy.scrollTo(target, anchor: .top)
+                    }
+                }
+                .onChange(of: store.requestedVisibleMonth) { requested in
+                    guard let requested else { return }
+                    // Rebuild only when the target month is outside the existing
+                    // section window. Most adjacent month taps can reuse the current
+                    // lazy stack and avoid event lane recalculation.
+                    ensureSectionExists(for: requested)
+                    pendingProgrammaticScroll?.cancel()
+
+                    let workItem = DispatchWorkItem {
+                        isProgrammaticMonthScroll = true
+                        withAnimation(.snappy(duration: 0.32, extraBounce: 0.02)) {
+                            proxy.scrollTo(requested, anchor: .top)
+                        }
+                        store.updateDisplayedMonthFromScroll(requested)
+                        if let currentRequest = store.requestedVisibleMonth,
+                           Calendar.current.isDate(currentRequest, equalTo: requested, toGranularity: .month)
+                        {
+                            store.requestedVisibleMonth = nil
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
+                            isProgrammaticMonthScroll = false
                         }
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 24 * scale)
-                }
-                .coordinateSpace(name: "calendar-scroll")
-            }
-            .calendarGlassSurface(cornerRadius: 14, material: .regularMaterial, tintOpacity: 0.20, shadowOpacity: 0.10)
-            .onPreferenceChange(VisibleMonthPreferenceKey.self) { values in
-                guard let closest = values.min(by: { abs($0.minY) < abs($1.minY) }) else { return }
-                let distance = abs(closest.minY)
-                if distance < 180,
-                   !Calendar.current.isDate(closest.monthStart, equalTo: store.displayedMonth, toGranularity: .month) {
-                    store.displayedMonth = closest.monthStart
+                    pendingProgrammaticScroll = workItem
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: workItem)
                 }
             }
-            .onAppear {
-                rebuildSections()
-                DispatchQueue.main.async {
-                    let target = store.requestedVisibleMonth ?? todayMonthStart
-                    proxy.scrollTo(target, anchor: .top)
-                    store.displayedMonth = target
-                }
-            }
-            .onChange(of: store.layoutRevision) { _ in
-                rebuildSections()
-                DispatchQueue.main.async {
-                    let target = store.requestedVisibleMonth ?? store.displayedMonth
-                    proxy.scrollTo(target, anchor: .top)
-                }
-            }
-            .onChange(of: store.requestedVisibleMonth) { requested in
-                guard let requested else { return }
-                rebuildSections()
-                DispatchQueue.main.async {
-                    withAnimation(.snappy(duration: 0.32, extraBounce: 0.02)) {
-                        proxy.scrollTo(requested, anchor: .top)
-                    }
-                    store.displayedMonth = requested
-                    store.requestedVisibleMonth = nil
-                }
-            }
-        }
         }
     }
 
     private var todayMonthStart: Date {
-        Self.monthStart(for: Date())
+        layoutBuilder.monthStart(for: Date())
     }
 
     private func weekdayHeader(scale: CGFloat) -> some View {
@@ -105,11 +136,19 @@ struct MonthGridView: View {
                     .frame(maxWidth: .infinity)
             }
         }
-        .padding(.vertical, 8 * scale)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(CalendarDesign.glassHighlight.opacity(0.72), lineWidth: 1)
+        .padding(.horizontal, 10 * scale)
+        .padding(.vertical, 7 * scale)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(CalendarDesign.divider)
+                .frame(height: 1)
+        }
+    }
+
+    private var calendarTableBackground: Color {
+        CalendarDesign.adaptiveColor(
+            light: NSColor.white.withAlphaComponent(0.86),
+            dark: NSColor(red: 0.10, green: 0.105, blue: 0.115, alpha: 0.92)
         )
     }
 
@@ -124,138 +163,37 @@ struct MonthGridView: View {
     }
 
     private func rebuildSections() {
-        let defaultStart = month(byAdding: -6, to: anchorMonth)
-        let defaultEnd = month(byAdding: 12, to: anchorMonth)
-        let requested = store.requestedVisibleMonth.map(Self.monthStart(for:))
-        let focused = Self.monthStart(for: store.displayedMonth)
-
-        let targetStart = [defaultStart, requested.map { month(byAdding: -6, to: $0) }, month(byAdding: -6, to: focused)]
-            .compactMap { $0 }
-            .min() ?? defaultStart
-        let targetEnd = [defaultEnd, requested.map { month(byAdding: 6, to: $0) }, month(byAdding: 6, to: focused)]
-            .compactMap { $0 }
-            .max() ?? defaultEnd
-        let startOffset = monthOffset(from: anchorMonth, to: targetStart)
-        let endOffset = monthOffset(from: anchorMonth, to: targetEnd)
-
-        let months = (startOffset...endOffset).compactMap { offset -> Date? in
-            month(byAdding: offset, to: anchorMonth)
-        }
-
-        sections = months.map { monthStart in
-            buildSection(monthStart: monthStart)
-        }
+        sections = layoutBuilder.buildSections(
+            anchorMonth: anchorMonth,
+            displayedMonth: store.displayedMonth,
+            requestedVisibleMonth: store.requestedVisibleMonth,
+            items: store.orderedFilteredItems
+        )
     }
 
-    private func buildSection(monthStart: Date) -> MonthSectionModel {
-        let weeks = makeWeeks(for: monthStart)
-        let filteredItems = store.orderedFilteredItems
-
-        let rows: [MonthWeekRowModel] = weeks.enumerated().map { index, week in
-            let segments = buildSegments(week: week, monthStart: monthStart, items: filteredItems)
-            let visibleCount = segments.filter { $0.lane < visibleLaneCount }.count
-            let hiddenCount = max(0, segments.count - visibleCount)
-            let hiddenCountByColumn = hiddenCountsByColumn(segments: segments)
-            let rowID = "\(monthStart.timeIntervalSinceReferenceDate)-\(index)"
-            return MonthWeekRowModel(
-                id: rowID,
-                week: week,
-                segments: segments,
-                hiddenCount: hiddenCount,
-                hiddenCountByColumn: hiddenCountByColumn
-            )
+    private func ensureSectionExists(for month: Date) {
+        let target = layoutBuilder.monthStart(for: month)
+        guard !sections.contains(where: { Calendar.current.isDate($0.monthStart, equalTo: target, toGranularity: .month) }) else {
+            return
         }
-
-        return MonthSectionModel(monthStart: monthStart, rows: rows)
+        rebuildSections()
     }
 
-    private func makeWeeks(for monthStart: Date) -> [[Date?]] {
-        let calendar = Calendar.current
-        let startWeekday = calendar.component(.weekday, from: monthStart) - 1
-        let totalDays = calendar.range(of: .day, in: .month, for: monthStart)?.count ?? 30
-        let totalCellCount = startWeekday + totalDays
-        let weekCount = Int(ceil(Double(totalCellCount) / 7.0))
-
-        let cells: [Date?] = (0..<(weekCount * 7)).map { index in
-            let dayNumber = index - startWeekday + 1
-            guard dayNumber >= 1, dayNumber <= totalDays else { return nil }
-            return calendar.date(byAdding: .day, value: dayNumber - 1, to: monthStart)
+    private func expandSectionsIfNeeded(around month: Date) {
+        guard let first = sections.first?.monthStart, let last = sections.last?.monthStart else {
+            rebuildSections()
+            return
         }
 
-        return stride(from: 0, to: weekCount * 7, by: 7).map { offset in
-            Array(cells[offset..<offset + 7])
+        let target = layoutBuilder.monthStart(for: month)
+        let monthsFromStart = layoutBuilder.monthOffset(from: first, to: target)
+        let monthsToEnd = layoutBuilder.monthOffset(from: target, to: last)
+
+        // While scrolling, extend the lazy month stack before the user hits the
+        // current edge so continuous wheel/trackpad scrolling can keep going.
+        if monthsFromStart <= 2 || monthsToEnd <= 2 {
+            rebuildSections()
         }
-    }
-
-    private func buildSegments(week: [Date?], monthStart: Date, items: [CalendarItem]) -> [WeekEventSegment] {
-        let activeDates = week.compactMap { $0 }
-        guard let firstDate = activeDates.first, let lastDate = activeDates.last else { return [] }
-
-        let relevantItems = items.filter { item in
-            guard let itemStart = item.displayStartDay, let itemEnd = item.displayEndDay else { return false }
-            return itemStart <= lastDate && itemEnd >= firstDate
-        }
-
-        var occupied: [[ClosedRange<Int>]] = Array(repeating: [], count: visibleLaneCount + 20)
-        var results: [WeekEventSegment] = []
-
-        for item in relevantItems {
-            let visibleIndices = week.enumerated().compactMap { index, date -> Int? in
-                guard let date, item.occurs(on: date) else { return nil }
-                return index
-            }
-            guard let startCol = visibleIndices.first, let endCol = visibleIndices.last else { continue }
-            let range = startCol...endCol
-
-            var lane = 0
-            while lane < occupied.count {
-                let hasConflict = occupied[lane].contains { existing in
-                    !(range.upperBound < existing.lowerBound || range.lowerBound > existing.upperBound)
-                }
-                if !hasConflict {
-                    occupied[lane].append(range)
-                    break
-                }
-                lane += 1
-            }
-
-            results.append(
-                WeekEventSegment(
-                    item: item,
-                    startColumn: startCol,
-                    endColumn: endCol,
-                    lane: lane,
-                    monthStart: monthStart
-                )
-            )
-        }
-
-        return results
-    }
-
-    private func hiddenCountsByColumn(segments: [WeekEventSegment]) -> [Int] {
-        var counts = Array(repeating: 0, count: 7)
-        for segment in segments where segment.lane >= visibleLaneCount {
-            for column in segment.startColumn...segment.endColumn {
-                if column >= 0 && column < counts.count {
-                    counts[column] += 1
-                }
-            }
-        }
-        return counts
-    }
-
-    private static func monthStart(for date: Date) -> Date {
-        Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: date)) ?? date
-    }
-
-    private func month(byAdding offset: Int, to date: Date) -> Date {
-        Calendar.current.date(byAdding: .month, value: offset, to: date)
-            .map(Self.monthStart(for:)) ?? Self.monthStart(for: date)
-    }
-
-    private func monthOffset(from start: Date, to end: Date) -> Int {
-        Calendar.current.dateComponents([.month], from: Self.monthStart(for: start), to: Self.monthStart(for: end)).month ?? 0
     }
 }
 
@@ -321,7 +259,6 @@ private struct MonthWeekRow: View {
         172 * scale
     }
 
-    @ViewBuilder
     private func dayHitAreas(columnWidth: CGFloat) -> some View {
         ForEach(Array(week.enumerated()), id: \.offset) { index, date in
             if let date {
@@ -337,9 +274,8 @@ private struct MonthWeekRow: View {
         }
     }
 
-    @ViewBuilder
     private func gridLines(height: CGFloat, columnWidth: CGFloat) -> some View {
-        ForEach(1..<7, id: \.self) { index in
+        ForEach(1 ..< 7, id: \.self) { index in
             Rectangle()
                 .fill(CalendarDesign.divider)
                 .frame(width: 1, height: height)
@@ -347,7 +283,6 @@ private struct MonthWeekRow: View {
         }
     }
 
-    @ViewBuilder
     private func selectedDayGlow(columnWidth: CGFloat) -> some View {
         ForEach(Array(week.enumerated()), id: \.offset) { index, date in
             if let date, isSelected(date) {
@@ -367,7 +302,6 @@ private struct MonthWeekRow: View {
         }
     }
 
-    @ViewBuilder
     private func dayHeaders(columnWidth: CGFloat) -> some View {
         ForEach(Array(week.enumerated()), id: \.offset) { index, date in
             Group {
@@ -399,9 +333,9 @@ private struct MonthWeekRow: View {
     @ViewBuilder
     private func eventBars(columnWidth: CGFloat) -> some View {
         ForEach(segments.filter { $0.lane < visibleLaneCount }) { segment in
-            let x = CGFloat(segment.startColumn) * columnWidth + 4
+            let xOffset = CGFloat(segment.startColumn) * columnWidth + 4
             let width = CGFloat(segment.endColumn - segment.startColumn + 1) * columnWidth - 8
-            let y = (54 + CGFloat(segment.lane) * 21) * scale
+            let yOffset = (54 + CGFloat(segment.lane) * 21) * scale
 
             MonthBarEventView(
                 item: segment.item,
@@ -410,7 +344,7 @@ private struct MonthWeekRow: View {
                 scale: scale
             )
             .frame(width: width, height: 17 * scale)
-            .offset(x: x, y: y)
+            .offset(x: xOffset, y: yOffset)
             .allowsHitTesting(false)
         }
 
@@ -552,52 +486,6 @@ private struct ContinuousEventPill: Shape {
         path.closeSubpath()
         return path
     }
-}
-
-private struct WeekEventSegment: Identifiable {
-    var id: String {
-        "\(item.uid)|\(monthStart.timeIntervalSinceReferenceDate)|\(startColumn)|\(endColumn)|\(lane)"
-    }
-    let item: CalendarItem
-    let startColumn: Int
-    let endColumn: Int
-    let lane: Int
-    let monthStart: Date
-
-    var position: CalendarSpanPosition {
-        let calendar = Calendar.current
-        let monthEnd = calendar.date(byAdding: .day, value: -1, to: calendar.date(byAdding: .month, value: 1, to: monthStart) ?? monthStart) ?? monthStart
-        let startsBeforeMonth = (item.displayStartDay ?? monthStart) < monthStart
-        let endsAfterMonth = (item.displayEndDay ?? monthEnd) > monthEnd
-
-        if !startsBeforeMonth && !endsAfterMonth && startColumn == endColumn {
-            return .single
-        }
-        if startsBeforeMonth && endsAfterMonth {
-            return .middle
-        }
-        if startsBeforeMonth {
-            return .end
-        }
-        if endsAfterMonth {
-            return .start
-        }
-        return startColumn == endColumn ? .single : .start
-    }
-}
-
-private struct MonthSectionModel: Identifiable {
-    var id: Date { monthStart }
-    let monthStart: Date
-    let rows: [MonthWeekRowModel]
-}
-
-private struct MonthWeekRowModel: Identifiable {
-    let id: String
-    let week: [Date?]
-    let segments: [WeekEventSegment]
-    let hiddenCount: Int
-    let hiddenCountByColumn: [Int]
 }
 
 private struct VisibleMonthInfo: Equatable {

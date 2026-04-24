@@ -1,8 +1,8 @@
 import Foundation
 import SwiftUI
 
-// Main state and sync orchestrator. Merges CalDAV and Google Calendar API accounts,
-// stores per-account errors, applies color overrides, and writes widget snapshots.
+/// Main state and sync orchestrator. Merges CalDAV and Google Calendar API accounts,
+/// stores per-account errors, applies color overrides, and writes widget snapshots.
 @MainActor
 final class CalendarStore: ObservableObject {
     @Published var naverID = ""
@@ -30,15 +30,38 @@ final class CalendarStore: ObservableObject {
 
     private var didAttemptInitialLoad = false
     private let customCalendarColorKey = "calendar.customColorCodes"
+    private let syncService: any CalendarSyncing
+    private let connectionManager: any CalendarConnectionManaging
+    private let widgetSnapshotWriter: any WidgetSnapshotWriting
+    private let userDefaults: UserDefaults
+    private let syncWindow = CalendarSyncWindow()
+    /// Tracks the server-backed range currently represented in `items`. Month
+    /// navigation can then fetch only missing far-past/far-future windows.
+    private var loadedRange: (start: Date, end: Date)?
+    /// Prevents repeated far-month navigation from launching duplicate sync tasks
+    /// while an additional range request is already in flight.
+    private var additionalLoadTask: Task<Void, Never>?
 
     var selectedItem: CalendarItem? {
         items.first(where: { $0.id == selectedItemID }).map(applyCustomColor)
     }
 
-    init() {
+    init(
+        syncService: any CalendarSyncing = LiveCalendarSyncing(),
+        connectionManager: any CalendarConnectionManaging = LiveCalendarConnectionManager(),
+        widgetSnapshotWriter: any WidgetSnapshotWriting = LiveWidgetSnapshotWriter(),
+        userDefaults: UserDefaults = .standard,
+        autoLoad: Bool = true
+    ) {
+        self.syncService = syncService
+        self.connectionManager = connectionManager
+        self.widgetSnapshotWriter = widgetSnapshotWriter
+        self.userDefaults = userDefaults
         restoreConnections()
         restoreCustomCalendarColors()
-        scheduleInitialLoadIfPossible()
+        if autoLoad {
+            scheduleInitialLoadIfPossible()
+        }
     }
 
     var calendarNames: [String] {
@@ -66,7 +89,7 @@ final class CalendarStore: ObservableObject {
     }
 
     var orderedFilteredItems: [CalendarItem] {
-        filteredItems.sorted(by: compareItems)
+        filteredItems.sorted(by: CalendarItemOrdering.compareItems)
     }
 
     var upcomingItems: [CalendarItem] {
@@ -78,15 +101,14 @@ final class CalendarStore: ObservableObject {
             }
     }
 
-    func load(shouldCloseSettings: Bool = true) {
+    @discardableResult
+    func load(shouldCloseSettings: Bool = true) -> Task<Void, Never> {
         errorText = ""
         diagnostics = []
         loading = true
-        // Calendar API and CalDAV do not share a common "fetch everything" contract.
-        // Keep the UI free of a month-range setting, but still send a broad bounded
-        // window so Google Calendar API and CalDAV servers can answer predictably.
-        let rangeStart = Calendar.current.date(byAdding: .year, value: -5, to: Date()) ?? Date()
-        let rangeEnd = Calendar.current.date(byAdding: .year, value: 10, to: Date()) ?? Date()
+        let syncRange = syncWindow.range(around: Date())
+        let rangeStart = syncRange.start
+        let rangeEnd = syncRange.end
         connectionErrors = [:]
         connectionCalendarCounts = [:]
 
@@ -107,80 +129,38 @@ final class CalendarStore: ObservableObject {
         let activeConnections = connections
         hasSavedConnection = !activeConnections.isEmpty
 
-        Task {
-            var mergedItems: [CalendarItem] = []
-            var mergedDiagnostics: [String] = []
-
-            // Each account is isolated: one bad Google/CalDAV account must not wipe
-            // successful items from other accounts. Store per-account errors for the
-            // settings UI and keep merging whatever succeeds.
-            for connection in activeConnections {
-                do {
-                    let result: FetchResult
-                    if connection.provider == "google" {
-                        result = try await GoogleCalendarClient(
-                            email: connection.email,
-                            refreshToken: connection.password
-                        )
-                        .fetchCalendarItems(rangeStart: rangeStart, rangeEnd: rangeEnd)
-                    } else {
-                        result = try await CalDAVClient(
-                            username: connection.email,
-                            appPassword: connection.password,
-                            serverURL: connection.serverURL
-                        )
-                        .fetchCalendarItems(rangeStart: rangeStart, rangeEnd: rangeEnd)
-                    }
-                    mergedDiagnostics.append("[\(connection.displayEmail)]")
-                    mergedDiagnostics.append(contentsOf: result.diagnostics)
-                    await MainActor.run {
-                        connectionCalendarCounts[connection.id] = result.items.count
-                        connectionErrors[connection.id] = nil
-                    }
-                    let source = connection.displayServer
-                    mergedItems.append(contentsOf: result.items.map { item in
-                        item.withSourceCalendar(
-                            CalendarText.calendarKey(
-                                source: source,
-                                calendar: item.sourceCalendar
-                            )
-                        )
-                    })
-                } catch {
-                    mergedDiagnostics.append("[\(connection.displayEmail)]")
-                    mergedDiagnostics.append("동기화 실패: \(error.localizedDescription)")
-                    await MainActor.run {
-                        connectionCalendarCounts[connection.id] = 0
-                        connectionErrors[connection.id] = error.localizedDescription
-                    }
-                    if let diagnosticError = error as? CalDAVError,
-                       case .diagnostic(_, let entries) = diagnosticError {
-                        mergedDiagnostics.append(contentsOf: entries)
-                    }
-                }
-            }
+        return Task {
+            let syncResult = await syncService.fetchItems(
+                connections: activeConnections,
+                rangeStart: rangeStart,
+                rangeEnd: rangeEnd
+            )
 
             await MainActor.run {
-                items = mergedItems.sorted(by: compareItems)
-                diagnostics = mergedDiagnostics
-                visibleCalendars = Set(mergedItems.map(\.sourceCalendar))
-                selectedItemID = mergedItems.first?.id
+                logSyncDiagnostics(syncResult.diagnostics)
+                items = syncResult.items
+                loadedRange = syncRange
+                diagnostics = syncResult.diagnostics
+                connectionCalendarCounts = syncResult.connectionCalendarCounts
+                connectionErrors = syncResult.connectionErrors
+                visibleCalendars = Set(syncResult.items.map(\.sourceCalendar))
+                selectedItemID = syncResult.items.first?.id
                 showingSettingsSheet = !shouldCloseSettings
                 let today = Calendar.current.startOfDay(for: Date())
-                let todayMonth = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: today)) ?? today
+                let todayMonth = monthStart(for: today)
                 selectedDate = today
                 displayedMonth = todayMonth
                 requestedVisibleMonth = todayMonth
                 layoutRevision += 1
                 loading = false
-                errorText = mergedItems.isEmpty && !activeConnections.isEmpty ? "연결된 계정에서 가져온 일정이 없습니다." : ""
+                errorText = syncResult.items.isEmpty && !activeConnections.isEmpty ? "연결된 계정에서 가져온 일정이 없습니다." : ""
                 saveWidgetSnapshot()
             }
         }
     }
 
     func restoreConnections() {
-        connections = ConnectionStore.loadConnections()
+        connections = connectionManager.loadConnections()
         hasSavedConnection = !connections.isEmpty
         if let first = connections.first {
             naverID = first.email
@@ -189,16 +169,19 @@ final class CalendarStore: ObservableObject {
         }
     }
 
-    func upsertConnection(_ connection: CalendarConnection, shouldReload: Bool = true) {
-        ConnectionStore.upsertConnection(connection)
+    @discardableResult
+    func upsertConnection(_ connection: CalendarConnection, shouldReload: Bool = true) -> Task<Void, Never>? {
+        connectionManager.upsertConnection(connection)
         restoreConnections()
         if shouldReload {
-            load(shouldCloseSettings: false)
+            return load(shouldCloseSettings: false)
         }
+        return nil
     }
 
-    func deleteConnection(id: String) {
-        ConnectionStore.deleteConnection(id: id)
+    @discardableResult
+    func deleteConnection(id: String) -> Task<Void, Never>? {
+        connectionManager.deleteConnection(id: id)
         restoreConnections()
         if connections.isEmpty {
             items = []
@@ -207,16 +190,19 @@ final class CalendarStore: ObservableObject {
             visibleCalendars = []
             selectedItemID = nil
             hasSavedConnection = false
-            try? WidgetSnapshotStore.save([])
-            WidgetSnapshotStore.refreshWidgets()
+            try? widgetSnapshotWriter.save([])
+            widgetSnapshotWriter.refreshWidgets()
         } else {
-            load(shouldCloseSettings: false)
+            let task = load(shouldCloseSettings: false)
+            layoutRevision += 1
+            return task
         }
         layoutRevision += 1
+        return nil
     }
 
     func disconnect() {
-        ConnectionStore.clear()
+        connectionManager.clear()
         naverID = ""
         appPassword = ""
         monthsAhead = "6"
@@ -228,9 +214,9 @@ final class CalendarStore: ObservableObject {
         connections = []
         layoutRevision += 1
 
-        try? WidgetSnapshotStore.save([])
-        ConnectionStore.saveWidgetEventSnapshots([])
-        WidgetSnapshotStore.refreshWidgets()
+        try? widgetSnapshotWriter.save([])
+        connectionManager.saveWidgetEventSnapshots([])
+        widgetSnapshotWriter.refreshWidgets()
     }
 
     func colorCode(for item: CalendarItem) -> String {
@@ -261,27 +247,42 @@ final class CalendarStore: ObservableObject {
         filteredItems.filter { item in
             item.occurs(on: day)
         }
-        .sorted { compareDayItems($0, $1, on: day) }
+        .sorted { CalendarItemOrdering.compareDayItems($0, $1, on: day) }
     }
 
-    func moveMonth(by offset: Int) {
+    @discardableResult
+    func moveMonth(by offset: Int) -> Task<Void, Never>? {
         if let next = Calendar.current.date(byAdding: .month, value: offset, to: displayedMonth) {
-            displayedMonth = next
+            let monthStart = monthStart(for: next)
+            displayedMonth = monthStart
+            requestedVisibleMonth = monthStart
+            return ensureLoaded(around: monthStart)
         }
+        return nil
     }
 
-    func jumpToMonth(_ month: Date) {
-        let monthStart = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: month)) ?? month
+    @discardableResult
+    func jumpToMonth(_ month: Date) -> Task<Void, Never>? {
+        let monthStart = monthStart(for: month)
         displayedMonth = monthStart
         requestedVisibleMonth = monthStart
+        return ensureLoaded(around: monthStart)
     }
 
-    func jumpToToday() {
+    @discardableResult
+    func jumpToToday() -> Task<Void, Never>? {
         let today = Calendar.current.startOfDay(for: Date())
         selectedDate = today
-        let month = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: today)) ?? today
+        let month = monthStart(for: today)
         displayedMonth = month
         requestedVisibleMonth = month
+        return ensureLoaded(around: month)
+    }
+
+    @discardableResult
+    func updateDisplayedMonthFromScroll(_ month: Date) -> Task<Void, Never>? {
+        displayedMonth = month
+        return ensureLoaded(around: month)
     }
 
     func selectItem(_ item: CalendarItem) {
@@ -314,57 +315,108 @@ final class CalendarStore: ObservableObject {
         }
     }
 
-    private func compareItems(_ lhs: CalendarItem, _ rhs: CalendarItem) -> Bool {
-        if lhs.isCompleted != rhs.isCompleted {
-            return rhs.isCompleted
+    @discardableResult
+    private func ensureLoaded(around month: Date) -> Task<Void, Never>? {
+        let monthStart = monthStart(for: month)
+        let nextMonth = Calendar.current.date(byAdding: .month, value: 1, to: monthStart) ?? monthStart
+        guard hasSavedConnection, !connections.isEmpty else {
+            return nil
+        }
+        guard !loading else {
+            return nil
+        }
+        guard let loadedRange else {
+            return load(shouldCloseSettings: false)
+        }
+        guard monthStart < loadedRange.start || nextMonth > loadedRange.end else {
+            return nil
+        }
+        if let additionalLoadTask {
+            return additionalLoadTask
         }
 
-        let left = lhs.startDate ?? .distantFuture
-        let right = rhs.startDate ?? .distantFuture
-        if left == right {
-            if lhs.isAllDay != rhs.isAllDay {
-                return lhs.isAllDay
+        let syncRange = syncWindow.range(around: monthStart)
+        let activeConnections = connections
+        loading = true
+
+        let task = Task {
+            let syncResult = await syncService.fetchItems(
+                connections: activeConnections,
+                rangeStart: syncRange.start,
+                rangeEnd: syncRange.end
+            )
+
+            await MainActor.run {
+                logSyncDiagnostics(syncResult.diagnostics)
+                mergeAdditionalSyncResult(syncResult, loadedRange: syncRange)
+                loading = false
+                additionalLoadTask = nil
             }
-            return lhs.summary < rhs.summary
         }
-        return left < right
+        additionalLoadTask = task
+        return task
     }
 
-    private func compareDayItems(_ lhs: CalendarItem, _ rhs: CalendarItem, on day: Date) -> Bool {
-        if lhs.isCompleted != rhs.isCompleted {
-            return !lhs.isCompleted
-        }
-
-        let leftEnd = daySortEndDate(lhs, on: day)
-        let rightEnd = daySortEndDate(rhs, on: day)
-        if leftEnd != rightEnd {
-            return leftEnd < rightEnd
-        }
-
-        let leftStart = lhs.startDate ?? .distantFuture
-        let rightStart = rhs.startDate ?? .distantFuture
-        if leftStart != rightStart {
-            return leftStart < rightStart
-        }
-
-        if lhs.isAllDay != rhs.isAllDay {
-            return lhs.isAllDay
-        }
-
-        return lhs.summary < rhs.summary
+    private func monthStart(for date: Date) -> Date {
+        Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: date)) ?? date
     }
 
-    private func daySortEndDate(_ item: CalendarItem, on day: Date) -> Date {
-        if let endDate = item.endDate {
-            return endDate
+    private func mergeAdditionalSyncResult(
+        _ syncResult: CalendarSyncResult,
+        loadedRange newRange: (start: Date, end: Date)
+    ) {
+        let knownCalendars = Set(items.map(\.sourceCalendar))
+        items = mergedItems(existing: items, incoming: syncResult.items)
+            .sorted(by: CalendarItemOrdering.compareItems)
+        diagnostics.append(contentsOf: syncResult.diagnostics)
+        connectionErrors.merge(syncResult.connectionErrors) { _, new in new }
+        visibleCalendars.formUnion(Set(syncResult.items.map(\.sourceCalendar)).subtracting(knownCalendars))
+        loadedRange = unionLoadedRange(loadedRange, newRange)
+        layoutRevision += 1
+        saveWidgetSnapshot()
+    }
+
+    /// DEBUG-only file logging is intentionally local to the sandbox tmp folder.
+    /// It lets us diagnose real CalDAV/Google bottlenecks without exposing tokens
+    /// or storing persistent personal data in the repository.
+    private func logSyncDiagnostics(_ entries: [String]) {
+        #if DEBUG
+            let lines = entries.map { "[lendar-sync] \($0)" }
+            for entry in entries {
+                print("[lendar-sync] \(entry)")
+            }
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("lendar-sync.log")
+            let payload = (["--- \(Date()) ---"] + lines).joined(separator: "\n") + "\n"
+            if let data = payload.data(using: .utf8) {
+                if FileManager.default.fileExists(atPath: url.path),
+                   let handle = try? FileHandle(forWritingTo: url)
+                {
+                    _ = try? handle.seekToEnd()
+                    try? handle.write(contentsOf: data)
+                    try? handle.close()
+                } else {
+                    try? data.write(to: url, options: .atomic)
+                }
+            }
+        #endif
+    }
+
+    private func mergedItems(existing: [CalendarItem], incoming: [CalendarItem]) -> [CalendarItem] {
+        var merged: [String: CalendarItem] = [:]
+        for item in existing + incoming {
+            merged[item.syncIdentityKey] = item
         }
-        if let displayEndDay = item.displayEndDay {
-            return displayEndDay
+        return Array(merged.values)
+    }
+
+    private func unionLoadedRange(
+        _ current: (start: Date, end: Date)?,
+        _ next: (start: Date, end: Date)
+    ) -> (start: Date, end: Date) {
+        guard let current else {
+            return next
         }
-        if let startDate = item.startDate {
-            return startDate
-        }
-        return Calendar.current.startOfDay(for: day)
+        return (min(current.start, next.start), max(current.end, next.end))
     }
 
     private func applyCustomColor(_ item: CalendarItem) -> CalendarItem {
@@ -375,309 +427,46 @@ final class CalendarStore: ObservableObject {
     }
 
     private func restoreCustomCalendarColors() {
-        let shared = ConnectionStore.loadCustomCalendarColorCodes()
-        if let data = UserDefaults.standard.data(forKey: customCalendarColorKey),
-           let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
+        let shared = connectionManager.loadCustomCalendarColorCodes()
+        if let data = userDefaults.data(forKey: customCalendarColorKey),
+           let decoded = try? JSONDecoder().decode([String: String].self, from: data)
+        {
             customCalendarColorCodes = shared.merging(decoded) { _, local in local }
         } else {
             customCalendarColorCodes = shared
         }
-        ConnectionStore.saveCustomCalendarColorCodes(customCalendarColorCodes)
+        connectionManager.saveCustomCalendarColorCodes(customCalendarColorCodes)
     }
 
     private func persistCustomCalendarColors() {
         guard let data = try? JSONEncoder().encode(customCalendarColorCodes) else {
             return
         }
-        UserDefaults.standard.set(data, forKey: customCalendarColorKey)
-        ConnectionStore.saveCustomCalendarColorCodes(customCalendarColorCodes)
+        userDefaults.set(data, forKey: customCalendarColorKey)
+        connectionManager.saveCustomCalendarColorCodes(customCalendarColorCodes)
     }
 
     private func saveWidgetSnapshot() {
         // Widgets cannot safely run the same network/auth flow as the app. The app is
         // the source of truth: after every sync/color change it writes a flattened,
         // already-colored event snapshot that the WidgetKit extension reads.
-        let snapshots = items.map { item in
-            WidgetEventSnapshot(
-                id: item.uid,
-                title: item.summary,
-                calendarName: item.sourceCalendar,
-                startTimestamp: item.startDate?.timeIntervalSince1970 ?? 0,
-                endTimestamp: item.endDate?.timeIntervalSince1970,
-                isAllDay: item.isAllDay,
-                location: item.location,
-                note: item.note,
-                status: item.derivedStatus,
-                colorCode: colorCode(for: item)
-            )
-        }
-        try? WidgetSnapshotStore.save(snapshots)
-        ConnectionStore.saveWidgetEventSnapshots(snapshots)
-        WidgetSnapshotStore.refreshWidgets()
+        let snapshots = WidgetSnapshotMapper.snapshots(from: items, colorCode: colorCode(for:))
+        try? widgetSnapshotWriter.save(snapshots)
+        connectionManager.saveWidgetEventSnapshots(snapshots)
+        widgetSnapshotWriter.refreshWidgets()
     }
 }
 
-enum GoogleOAuthConfig {
-    static var clientID: String {
-        localConfig?.clientID ?? ProcessInfo.processInfo.environment["LENDAR_GOOGLE_CLIENT_ID"] ?? ""
+private extension CalendarItem {
+    /// Stable enough to merge repeated range fetches without keeping duplicate rows
+    /// when sync windows overlap.
+    var syncIdentityKey: String {
+        [
+            type.rawValue,
+            sourceCalendar,
+            uid,
+            startDate.map { String($0.timeIntervalSinceReferenceDate) } ?? "",
+            endDate.map { String($0.timeIntervalSinceReferenceDate) } ?? "",
+        ].joined(separator: "|")
     }
-
-    static var clientSecret: String {
-        localConfig?.clientSecret ?? ProcessInfo.processInfo.environment["LENDAR_GOOGLE_CLIENT_SECRET"] ?? ""
-    }
-
-    static let authURI = "https://accounts.google.com/o/oauth2/auth"
-    static let tokenURI = "https://oauth2.googleapis.com/token"
-    static let calendarAPIBase = "https://www.googleapis.com/calendar/v3"
-    static let calendarReadOnlyScope = "https://www.googleapis.com/auth/calendar.readonly"
-
-    private static var localConfig: LocalGoogleOAuthConfig? {
-        let candidates = [
-            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".lendar/google-oauth.json")
-        ]
-
-        for url in candidates {
-            guard let data = try? Data(contentsOf: url) else { continue }
-            if let direct = try? JSONDecoder().decode(LocalGoogleOAuthConfig.self, from: data) {
-                return direct
-            }
-            if let wrapped = try? JSONDecoder().decode(LocalGoogleOAuthInstalledConfig.self, from: data) {
-                return wrapped.installed
-            }
-        }
-        return nil
-    }
-}
-
-private struct LocalGoogleOAuthInstalledConfig: Decodable {
-    let installed: LocalGoogleOAuthConfig
-}
-
-private struct LocalGoogleOAuthConfig: Decodable {
-    let clientID: String
-    let clientSecret: String
-
-    enum CodingKeys: String, CodingKey {
-        case clientID = "client_id"
-        case clientSecret = "client_secret"
-    }
-}
-
-struct GoogleCalendarClient {
-    let email: String
-    let refreshToken: String
-
-    func fetchCalendarItems(rangeStart: Date, rangeEnd: Date) async throws -> FetchResult {
-        // Google Calendar uses OAuth + JSON REST APIs, not the Basic Auth CalDAV flow
-        // used by Naver. The stored password field is a refresh token for this provider.
-        let accessToken = try await refreshAccessToken()
-        var diagnostics = ["Google Calendar API account: \(email)"]
-        let calendars = try await fetchCalendars(accessToken: accessToken)
-        diagnostics.append("Google calendars: \(calendars.count)")
-
-        var items: [CalendarItem] = []
-        for calendar in calendars {
-            let events = try await fetchEvents(calendar: calendar, accessToken: accessToken, rangeStart: rangeStart, rangeEnd: rangeEnd)
-            diagnostics.append("Calendar: \(calendar.summary) events=\(events.count)")
-            items.append(contentsOf: events)
-        }
-
-        return FetchResult(items: items.sorted { ($0.startDate ?? .distantFuture) < ($1.startDate ?? .distantFuture) }, diagnostics: diagnostics)
-    }
-
-    private func refreshAccessToken() async throws -> String {
-        var request = URLRequest(url: URL(string: GoogleOAuthConfig.tokenURI)!)
-        request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        request.httpBody = formBody([
-            "client_id": GoogleOAuthConfig.clientID,
-            "client_secret": GoogleOAuthConfig.clientSecret,
-            "refresh_token": refreshToken,
-            "grant_type": "refresh_token"
-        ])
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        try validateHTTP(response: response, data: data)
-        let token = try JSONDecoder().decode(GoogleTokenResponse.self, from: data)
-        guard let accessToken = token.accessToken, !accessToken.isEmpty else {
-            throw CalDAVError.auth("Google access token not returned")
-        }
-        return accessToken
-    }
-
-    private func fetchCalendars(accessToken: String) async throws -> [GoogleCalendar] {
-        var components = URLComponents(string: "\(GoogleOAuthConfig.calendarAPIBase)/users/me/calendarList")!
-        components.queryItems = [
-            URLQueryItem(name: "showHidden", value: "true"),
-            URLQueryItem(name: "minAccessRole", value: "reader")
-        ]
-        var request = authorizedRequest(url: components.url!, accessToken: accessToken)
-        request.httpMethod = "GET"
-        let (data, response) = try await URLSession.shared.data(for: request)
-        try validateHTTP(response: response, data: data)
-        return try JSONDecoder().decode(GoogleCalendarListResponse.self, from: data).items ?? []
-    }
-
-    private func fetchEvents(calendar: GoogleCalendar, accessToken: String, rangeStart: Date, rangeEnd: Date) async throws -> [CalendarItem] {
-        var results: [CalendarItem] = []
-        var pageToken: String?
-
-        repeat {
-            var components = URLComponents(string: "\(GoogleOAuthConfig.calendarAPIBase)/calendars/\(Self.urlPath(calendar.id))/events")!
-            components.queryItems = [
-                URLQueryItem(name: "singleEvents", value: "true"),
-                URLQueryItem(name: "orderBy", value: "startTime"),
-                URLQueryItem(name: "maxResults", value: "2500"),
-                URLQueryItem(name: "timeMin", value: Self.rfc3339(rangeStart)),
-                URLQueryItem(name: "timeMax", value: Self.rfc3339(rangeEnd))
-            ]
-            if let pageToken {
-                components.queryItems?.append(URLQueryItem(name: "pageToken", value: pageToken))
-            }
-
-            var request = authorizedRequest(url: components.url!, accessToken: accessToken)
-            request.httpMethod = "GET"
-            let (data, response) = try await URLSession.shared.data(for: request)
-            try validateHTTP(response: response, data: data)
-            let decoded = try JSONDecoder().decode(GoogleEventsResponse.self, from: data)
-            results.append(contentsOf: (decoded.items ?? []).compactMap { event in
-                item(from: event, calendar: calendar)
-            })
-            pageToken = decoded.nextPageToken
-        } while pageToken != nil
-
-        return results
-    }
-
-    private func item(from event: GoogleEvent, calendar: GoogleCalendar) -> CalendarItem? {
-        guard let start = parseGoogleDate(event.start), let end = parseGoogleDate(event.end) else {
-            return nil
-        }
-        let isAllDay = event.start?.date != nil
-        let colorCode = calendar.backgroundColor.map { CalendarPalette.customColorPrefix + $0.trimmingCharacters(in: CharacterSet(charactersIn: "#")) } ?? "0"
-        return CalendarItem(
-            type: .event,
-            uid: event.id,
-            summary: event.summary ?? "(제목 없음)",
-            startOrDue: "",
-            endOrCompleted: "",
-            location: event.location ?? "",
-            note: event.description ?? "",
-            status: event.status ?? "",
-            sourceCalendar: calendar.summary,
-            sourceColorCode: colorCode,
-            rawFields: [:],
-            startDate: start.date,
-            endDate: end.date,
-            isAllDay: isAllDay
-        )
-    }
-
-    private func parseGoogleDate(_ value: GoogleEventDate?) -> (date: Date, allDay: Bool)? {
-        guard let value else { return nil }
-        if let dateTime = value.dateTime, let date = Self.isoFormatter().date(from: dateTime) ?? Self.isoFormatterWithFraction().date(from: dateTime) {
-            return (date, false)
-        }
-        if let rawDate = value.date {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.timeZone = TimeZone.current
-            formatter.dateFormat = "yyyy-MM-dd"
-            if let date = formatter.date(from: rawDate) {
-                return (date, true)
-            }
-        }
-        return nil
-    }
-
-    private func authorizedRequest(url: URL, accessToken: String) -> URLRequest {
-        var request = URLRequest(url: url)
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        return request
-    }
-
-    private func validateHTTP(response: URLResponse, data: Data) throws {
-        guard let http = response as? HTTPURLResponse else {
-            throw CalDAVError.network("invalid HTTP response")
-        }
-        guard (200...299).contains(http.statusCode) else {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            throw CalDAVError.http(http.statusCode, body)
-        }
-    }
-
-    private func formBody(_ values: [String: String]) -> Data {
-        values
-            .map { key, value in
-                "\(Self.urlForm(key))=\(Self.urlForm(value))"
-            }
-            .joined(separator: "&")
-            .data(using: .utf8) ?? Data()
-    }
-
-    private static func urlForm(_ value: String) -> String {
-        value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
-    }
-
-    private static func urlPath(_ value: String) -> String {
-        value.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? value
-    }
-
-    private static func rfc3339(_ date: Date) -> String {
-        isoFormatter().string(from: date)
-    }
-
-    private static func isoFormatter() -> ISO8601DateFormatter {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }
-
-    private static func isoFormatterWithFraction() -> ISO8601DateFormatter {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }
-}
-
-struct GoogleTokenResponse: Decodable {
-    let accessToken: String?
-    let refreshToken: String?
-    let expiresIn: Int?
-
-    enum CodingKeys: String, CodingKey {
-        case accessToken = "access_token"
-        case refreshToken = "refresh_token"
-        case expiresIn = "expires_in"
-    }
-}
-
-private struct GoogleCalendarListResponse: Decodable {
-    let items: [GoogleCalendar]?
-}
-
-private struct GoogleCalendar: Decodable {
-    let id: String
-    let summary: String
-    let backgroundColor: String?
-}
-
-private struct GoogleEventsResponse: Decodable {
-    let items: [GoogleEvent]?
-    let nextPageToken: String?
-}
-
-private struct GoogleEvent: Decodable {
-    let id: String
-    let status: String?
-    let summary: String?
-    let description: String?
-    let location: String?
-    let start: GoogleEventDate?
-    let end: GoogleEventDate?
-}
-
-private struct GoogleEventDate: Decodable {
-    let date: String?
-    let dateTime: String?
 }

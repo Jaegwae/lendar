@@ -95,11 +95,28 @@ Xcode 프로젝트:
 open /Users/jaegwan/Desktop/VSCODE/calendar/NaverCalendar.xcodeproj
 ```
 
+### Xcode에서 실행
+
+앱을 실행하려면 Xcode 상단 스킴을 `NaverCalendarViewer`로 선택하고 Destination을 `My Mac`으로 둔 뒤 `Cmd + R`을 누릅니다.
+
+`NaverCalendarWidget` 스킴은 앱이 아니라 WidgetKit Simulator를 띄워 위젯의 placeholder/snapshot/timeline을 확인하는 용도입니다. 본 앱 화면을 보고 싶을 때 이 스킴을 실행하면 안 됩니다.
+
+개발 중에는 `/Applications/lendar.app`에 복사된 오래된 앱과 Xcode DerivedData의 Debug 앱이 섞일 수 있습니다. 이상한 동작이 보이면 실행 중인 `lendar`, `lendar Widget`, `WidgetKit Simulator`를 종료하고 `NaverCalendarViewer` 스킴으로 다시 실행하세요.
+
 명령줄 빌드:
 
 ```bash
 xcodebuild -project NaverCalendar.xcodeproj -scheme NaverCalendarViewer -configuration Debug -destination 'platform=macOS' build
+xcodebuild -project NaverCalendar.xcodeproj -scheme NaverCalendarWidget -configuration Debug -destination 'platform=macOS' build
 swift build
+swift test
+```
+
+포맷과 린트:
+
+```bash
+swiftformat Sources WidgetExtension Tests
+swiftlint lint
 ```
 
 ## 현재 제한

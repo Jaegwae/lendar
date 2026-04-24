@@ -4,8 +4,14 @@
 AGENTS.md
 
 # Local credentials / secrets
+.lendar/
+**/.lendar/
 client_secret*.json
 google-oauth*.json
+*.credentials.json
+*credentials*.json
+local-secrets.*
+defaults-read*.txt
 *.p12
 *.mobileprovision
 

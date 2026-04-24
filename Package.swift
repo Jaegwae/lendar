@@ -11,6 +11,10 @@ let package = Package(
         .executableTarget(
             name: "NaverCalDAVViewer",
             dependencies: []
+        ),
+        .testTarget(
+            name: "NaverCalDAVViewerTests",
+            dependencies: ["NaverCalDAVViewer"]
         )
     ]
 )

@@ -52,21 +52,100 @@
   - `Setting > Sync Settings` 메뉴에서 `.openSyncSettings` notification 발행
 
 - `Sources/NaverCalDAVViewer/ContentView.swift`
-  - 메인 앱 UI 대부분
-  - 상단 툴바, 사이드바, 월 이동 팝오버, 설정 모달, 검색 모달, 날짜별 일정 모달, 일정 상세 모달 포함
-  - Google OAuth loopback 서버도 이 파일 하단에 있음
+  - 메인 앱 UI 조립부
+  - 상단 툴바, 사이드바, 모달 라우팅 포함
+  - 설정/검색/일정 모달, 검색 알고리즘, 월간 레이아웃, Google OAuth/Calendar API 구현은 별도 파일로 분리됨
+
+- `Sources/NaverCalDAVViewer/SettingsSheet.swift`
+  - 연결 설정 UI
+  - 계정 추가/수정/삭제, Google OAuth 시작, CalDAV 수동 입력 흐름 포함
+
+- `Sources/NaverCalDAVViewer/SearchSheet.swift`
+  - 일정 검색 모달 UI
+  - 기간 필터 UI와 검색 결과 리스트 포함
+
+- `Sources/NaverCalDAVViewer/EventSheets.swift`
+  - 날짜별 일정 모달과 일정 상세 모달 UI
+
+- `Sources/NaverCalDAVViewer/CalendarPopovers.swift`
+  - 캘린더 색상 팔레트, 월 이동, compact date picker 팝오버 UI
+
+- `Sources/NaverCalDAVViewer/CalendarViewSurfaces.swift`
+  - 앱 전용 modal/input/header surface view modifier
 
 - `Sources/NaverCalDAVViewer/CalendarStore.swift`
-  - 앱 상태와 동기화 오케스트레이션
-  - `connections` 배열을 읽고 각 계정을 순회
+  - 앱 상태와 동기화 결과 반영
+  - 캘린더 선택/월 이동/날짜 선택/색상 override/위젯 스냅샷 저장 트리거 담당
+
+- `Sources/NaverCalDAVViewer/CalendarSyncService.swift`
+  - 연결된 계정 배열을 순회하며 동기화
   - `provider == "google"`이면 `GoogleCalendarClient`
   - 그 외는 `CalDAVClient`
-  - 계정별 실패는 전체 동기화를 망치지 않고 `connectionErrors`에 저장
+  - 계정별 실패는 전체 동기화를 망치지 않고 per-account 결과로 반환
+  - 여러 계정은 병렬로 동기화하되, 결과/진단은 저장된 계정 순서대로 합침
+
+- `Sources/NaverCalDAVViewer/CalendarSyncWindow.swift`
+  - 초기 동기화 범위 제한
+  - Google 반복 일정 서버 확장을 줄이기 위해 현재 월 기준 과거 12개월/미래 24개월만 요청
+
+- `Sources/NaverCalDAVViewer/CalendarItemOrdering.swift`
+  - 전체 일정/날짜별 일정 정렬 규칙
+
+- `Sources/NaverCalDAVViewer/WidgetSnapshotMapper.swift`
+  - 앱 `CalendarItem`을 위젯용 `WidgetEventSnapshot`으로 변환
+
+- `Sources/NaverCalDAVViewer/GoogleOAuthCoordinator.swift`
+  - Google OAuth 브라우저 인증 흐름
+  - 127.0.0.1 loopback callback 서버 포함
+
+- `Sources/NaverCalDAVViewer/GoogleCalendarClient.swift`
+  - Google Calendar API 동기화
+  - OAuth 설정 로딩, token refresh, calendar/event 조회 모델 포함
+
+- `Sources/NaverCalDAVViewer/ScheduleSearch.swift`
+  - 검색 모달의 기간 필터와 fuzzy score 로직
+  - UI 밖의 순수 로직이라 단위 테스트 대상
+
+- `Sources/NaverCalDAVViewer/MonthLayoutBuilder.swift`
+  - 월간 그리드의 month/week 생성과 event lane 배치
+  - UI 밖의 순수 로직이라 단위 테스트 대상
+
+- `Sources/NaverCalDAVViewer/SharedCalendarPalette.swift`
+  - 앱과 위젯이 공유하는 캘린더 색상 코드/RGB 매핑
+
+- `Sources/NaverCalDAVViewer/CalendarDesign.swift`
+  - 앱 디자인 토큰과 adaptive color
+
+- `Sources/NaverCalDAVViewer/CalendarBaseViewModifiers.swift`
+  - 앱 공통 icon hover/glass surface/button style modifier
+
+- `Sources/NaverCalDAVViewer/CalendarValueParser.swift`
+  - iCalendar 날짜/시간 값 parser
+
+- `Sources/NaverCalDAVViewer/CalendarFormatting.swift`
+  - 앱 날짜/시간 formatter와 일정 시간 문자열
+
+- `Sources/NaverCalDAVViewer/CalendarPalette.swift`
+  - 앱 캘린더 색상 선택/표시 로직
+
+- `Sources/NaverCalDAVViewer/CalendarText.swift`
+  - CDATA cleanup, source calendar key/display helper
 
 - `Sources/NaverCalDAVViewer/ConnectionStore.swift`
-  - 계정 메타데이터/비밀값 저장
+  - 계정 메타데이터 저장과 legacy migration orchestration
   - v2 다중 계정 저장 포맷 관리
-  - release에서는 Keychain, debug에서는 계정별 UserDefaults 키를 사용
+  - 비밀값/공유 데이터 저장은 helper 파일로 분리됨
+
+- `Sources/NaverCalDAVViewer/CalendarConnection.swift`
+  - 저장 계정 모델
+
+- `Sources/NaverCalDAVViewer/ConnectionNormalizer.swift`
+  - 사용자명, 서버 URL, provider 판별 정규화
+
+- `Sources/NaverCalDAVViewer/ConnectionPasswordStore.swift`
+  - release Keychain / debug UserDefaults 기반 계정 비밀값 저장
+
+- `Sources/NaverCalDAVViewer/SharedKeychainStore.swift`
   - 위젯용 스냅샷과 커스텀 색상을 shared Data Protection Keychain에 저장
 
 - `Sources/NaverCalDAVViewer/CalDAVClient.swift`
@@ -74,12 +153,29 @@
   - 네이버 CalDAV에 사용
   - Google CalDAV는 최종적으로 쓰지 않는 방향으로 결정
 
+- `Sources/NaverCalDAVViewer/CalDAVPath.swift`
+  - CalDAV URL/path 정규화, fallback path 생성
+
+- `Sources/NaverCalDAVViewer/CalDAVXML.swift`
+  - `XMLParser` 기반 CalDAV multistatus 응답 파싱
+  - `href`, `calendar-data`, principal/home-set, calendar component metadata 추출
+
+- `Sources/NaverCalDAVViewer/CalDAVDateFormatting.swift`
+  - CalDAV UTC timestamp formatting
+
+- `Sources/NaverCalDAVViewer/CalDAVError.swift`
+  - CalDAV error 모델
+
 - `Sources/NaverCalDAVViewer/ICSParser.swift`
   - CalDAV에서 받은 iCalendar 텍스트를 `CalendarItem`으로 변환
+  - folded line, 반복 필드, `TZID`/`VALUE=DATE`, `RDATE`, `RECURRENCE-ID` override 처리
+
+- `Sources/NaverCalDAVViewer/ICSRecurrenceRule.swift`
+  - `DAILY`/`WEEKLY`/`MONTHLY`/`YEARLY` RRULE 확장 처리
+  - `WKST`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYYEARDAY`, `BYWEEKNO`, `BYSETPOS` 필터 처리
 
 - `Sources/NaverCalDAVViewer/Models.swift`
-  - `CalendarItem`, `WidgetEventSnapshot`, `CalendarConnection` 관련 모델
-  - `CalendarConnection`은 현재 `ConnectionStore.swift`에 있음
+  - `CalendarItem`, `WidgetEventSnapshot` 등 공유 값 모델
 
 - `Sources/NaverCalDAVViewer/MonthGridView.swift`
   - 월간 캘린더 그리드
@@ -173,7 +269,7 @@
 
 ## Google OAuth 구현
 
-Google OAuth 관련 코드는 `ContentView.swift` 하단에 있다.
+Google OAuth 관련 코드는 `Sources/NaverCalDAVViewer/GoogleOAuthCoordinator.swift`에 있다.
 
 ### GoogleOAuthConfig
 
@@ -215,14 +311,15 @@ Google 테스트 앱이므로 다음이 나올 수 있다.
 
 ## Google Calendar API 구현
 
-`GoogleCalendarClient`는 `CalendarStore.swift` 하단에 있다.
+`GoogleCalendarClient`는 `Sources/NaverCalDAVViewer/GoogleCalendarClient.swift`에 있다.
 
 작동:
 
 1. refresh token으로 access token 발급
 2. `calendarList` 조회
-3. 각 캘린더의 `events` 조회
+3. 각 캘린더의 `events` 조회 (`singleEvents=true`, `showDeleted=false`)
 4. `GoogleEvent`를 `CalendarItem`으로 변환
+5. `status=cancelled` 이벤트는 표시 항목에서 제외
 
 현재 이벤트 조회 범위:
 

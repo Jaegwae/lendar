@@ -1,7 +1,7 @@
 import SwiftUI
 
-// Compact month picker retained for older navigation surfaces. The primary month
-// jump popover currently lives in ContentView.
+/// Compact month picker retained for older navigation surfaces. The primary month
+/// jump popover currently lives in ContentView.
 struct MiniMonthNavigatorView: View {
     @ObservedObject var store: CalendarStore
 
@@ -16,15 +16,21 @@ struct MiniMonthNavigatorView: View {
                     .tracking(-0.374)
                     .foregroundStyle(CalendarDesign.nearBlack)
                 Spacer()
-                Button(action: { store.moveMonth(by: -1) }) {
-                    Image(systemName: "chevron.left")
-                        .calendarAnimatedIcon(rotation: -18, scale: 1.10)
-                }
+                Button(
+                    action: { store.moveMonth(by: -1) },
+                    label: {
+                        Image(systemName: "chevron.left")
+                            .calendarAnimatedIcon(rotation: -18, scale: 1.10)
+                    }
+                )
                 .buttonStyle(CalendarAnimatedIconButtonStyle())
-                Button(action: { store.moveMonth(by: 1) }) {
-                    Image(systemName: "chevron.right")
-                        .calendarAnimatedIcon(rotation: 18, scale: 1.10)
-                }
+                Button(
+                    action: { store.moveMonth(by: 1) },
+                    label: {
+                        Image(systemName: "chevron.right")
+                            .calendarAnimatedIcon(rotation: 18, scale: 1.10)
+                    }
+                )
                 .buttonStyle(CalendarAnimatedIconButtonStyle())
             }
 
@@ -49,7 +55,7 @@ struct MiniMonthNavigatorView: View {
                         .foregroundStyle(foregroundColor(for: date))
                         .onTapGesture {
                             store.selectedDate = Calendar.current.startOfDay(for: date)
-                            store.displayedMonth = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: date)) ?? date
+                            store.jumpToMonth(date)
                         }
                 }
             }
@@ -63,7 +69,7 @@ struct MiniMonthNavigatorView: View {
         let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: store.displayedMonth)) ?? store.displayedMonth
         let weekday = calendar.component(.weekday, from: monthStart)
         let firstCell = calendar.date(byAdding: .day, value: -(weekday - 1), to: monthStart) ?? monthStart
-        return (0..<42).compactMap { calendar.date(byAdding: .day, value: $0, to: firstCell) }
+        return (0 ..< 42).compactMap { calendar.date(byAdding: .day, value: $0, to: firstCell) }
     }
 
     private func isSelected(_ date: Date) -> Bool {

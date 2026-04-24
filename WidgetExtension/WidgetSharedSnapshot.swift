@@ -1,8 +1,8 @@
 import Foundation
 import SwiftUI
 
-// Widget-safe snapshot loading and color conversion. This file must remain free of
-// credentialed network calls to avoid WidgetKit refresh and Keychain prompt issues.
+/// Widget-safe snapshot loading and color conversion. This file must remain free of
+/// credentialed network calls to avoid WidgetKit refresh and Keychain prompt issues.
 extension WidgetEventSnapshot {
     static let samples: [WidgetEventSnapshot] = [
         WidgetEventSnapshot(
@@ -28,7 +28,7 @@ extension WidgetEventSnapshot {
             note: "",
             status: "COMPLETED",
             colorCode: "2"
-        )
+        ),
     ]
 }
 
@@ -110,48 +110,8 @@ enum WidgetCalendarLoader {
 }
 
 enum WidgetPalette {
-    private static let customColorPrefix = "custom:"
-
     static func color(for code: String) -> Color {
-        if code.hasPrefix(customColorPrefix) {
-            return color(hex: String(code.dropFirst(customColorPrefix.count)))
-        }
-
-        switch code {
-        case "0":
-            return Color(red: 0.15, green: 0.56, blue: 0.96)
-        case "1":
-            return Color(red: 0.11, green: 0.72, blue: 0.41)
-        case "2":
-            return Color(red: 0.96, green: 0.49, blue: 0.18)
-        case "3":
-            return Color(red: 0.93, green: 0.28, blue: 0.43)
-        case "4":
-            return Color(red: 0.47, green: 0.35, blue: 0.93)
-        case "5":
-            return Color(red: 0.94, green: 0.73, blue: 0.16)
-        case "6":
-            return Color(red: 0.0, green: 0.65, blue: 0.72)
-        case "7":
-            return Color(red: 0.18, green: 0.74, blue: 0.64)
-        case "8":
-            return Color(red: 0.93, green: 0.20, blue: 0.20)
-        case "9":
-            return Color(red: 0.28, green: 0.39, blue: 0.95)
-        default:
-            return Color(red: 0.15, green: 0.56, blue: 0.96)
-        }
-    }
-
-    private static func color(hex: String) -> Color {
-        let cleaned = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        guard cleaned.count == 6, let value = Int(cleaned, radix: 16) else {
-            return Color(red: 0.15, green: 0.56, blue: 0.96)
-        }
-
-        let red = Double((value >> 16) & 0xff) / 255.0
-        let green = Double((value >> 8) & 0xff) / 255.0
-        let blue = Double(value & 0xff) / 255.0
-        return Color(red: red, green: green, blue: blue)
+        let rgb = CalendarColorCatalog.rgb(for: code)
+        return Color(red: rgb.red, green: rgb.green, blue: rgb.blue)
     }
 }

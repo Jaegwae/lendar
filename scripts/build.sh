@@ -13,6 +13,7 @@ swiftc \
   -framework SwiftUI \
   -framework AppKit \
   -framework Foundation \
+  -framework Network \
   -framework Security \
   "$ROOT_DIR"/Sources/NaverCalDAVViewer/*.swift \
   -o "$OUT_DIR/$APP_NAME"
